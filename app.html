@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VoxEdit — Transcription Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-0: #0e0e10;
+    --bg-1: #141416;
+    --bg-2: #1a1a1d;
+    --bg-3: #202024;
+    --bg-4: #28282e;
+    --border: rgba(255,255,255,0.07);
+    --border-mid: rgba(255,255,255,0.12);
+    --text-0: #f0f0ee;
+    --text-1: #a8a8a4;
+    --text-2: #6a6a66;
+    --accent: #f97316;
+    --accent-dim: rgba(249,115,22,0.15);
+    --accent-glow: rgba(249,115,22,0.08);
+    --highlight: rgba(249,115,22,0.22);
+    --highlight-border: rgba(249,115,22,0.5);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.12);
+    --red: #ef4444;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Figtree', sans-serif;
+    --radius: 6px;
+    --radius-lg: 10px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-0);
+    color: var(--text-0);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── LAYOUT ─────────────────────────────────────────── */
+  #app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ─── TOPBAR ──────────────────────────────────────────── */
+  .topbar {
+    display: flex; align-items: center; gap: 0;
+    height: 52px; min-height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-1);
+    padding: 0 20px;
+    position: relative; z-index: 10;
+  }
+  .topbar-logo {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
+    color: var(--text-0); text-decoration: none;
+  }
+  .logo-mark {
+    width: 22px; height: 22px; background: var(--accent);
+    border-radius: 4px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #000; font-family: var(--mono);
+    flex-shrink: 0;
+  }
+  .topbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 16px; }
+  .topbar-title {
+    font-size: 13px; color: var(--text-1); font-weight: 400;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;
+  }
+  .topbar-title span { color: var(--text-0); font-weight: 500; }
+  .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* ─── BUTTONS ─────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: var(--radius);
+    font-size: 12px; font-weight: 500; font-family: var(--sans);
+    cursor: pointer; transition: all 0.15s; border: none; outline: none;
+    white-space: nowrap;
+  }
+  .btn-ghost {
+    background: transparent; color: var(--text-1);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { background: var(--bg-3); color: var(--text-0); border-color: var(--border-mid); }
+  .btn-accent {
+    background: var(--accent); color: #000; font-weight: 600;
+  }
+  .btn-accent:hover { background: #fb923c; }
+  .btn-accent:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+  /* ─── MAIN CONTENT ────────────────────────────────────── */
+  .main { flex: 1; display: flex; overflow: hidden; }
+
+  /* ─── SIDEBAR ─────────────────────────────────────────── */
+  .sidebar {
+    width: 240px; min-width: 240px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-1);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-section { padding: 14px 14px 8px; }
+  .sidebar-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-2); margin-bottom: 8px;
+  }
+  .sidebar-stat {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 8px; border-radius: var(--radius);
+    font-size: 12px; color: var(--text-1);
+    transition: background 0.12s;
+  }
+  .sidebar-stat:hover { background: var(--bg-3); }
+  .sidebar-stat .val { color: var(--text-0); font-family: var(--mono); font-size: 11px; }
+  .sidebar-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+  .model-badge {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px; border-radius: var(--radius);
+    background: var(--bg-2); border: 1px solid var(--border);
+    font-size: 11px; color: var(--text-1); margin: 0 14px 14px;
+  }
+  .model-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .model-name { color: var(--text-0); font-family: var(--mono); font-size: 11px; }
+
+  .sidebar-spacer { flex: 1; }
+
+  .api-key-block { padding: 14px; border-top: 1px solid var(--border); }
+  .api-key-label { font-size: 11px; color: var(--text-2); margin-bottom: 6px; }
+  .api-key-input-wrap { position: relative; }
+  .api-key-input {
+    width: 100%; background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 7px 32px 7px 10px;
+    font-size: 11px; font-family: var(--mono); color: var(--text-0);
+    outline: none; transition: border-color 0.15s;
+  }
+  .api-key-input:focus { border-color: var(--border-mid); }
+  .api-key-input::placeholder { color: var(--text-2); }
+  .api-key-toggle {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; color: var(--text-2);
+    padding: 2px; display: flex; align-items: center;
+  }
+  .api-key-toggle:hover { color: var(--text-1); }
+
+  /* ─── EDITOR AREA ─────────────────────────────────────── */
+  .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-0); }
+
+  /* ─── UPLOAD SCREEN ───────────────────────────────────── */
+  #upload-screen {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 40px;
+  }
+  .upload-card {
+    width: 100%; max-width: 520px;
+    background: var(--bg-1); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 40px;
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+    text-align: center;
+  }
+  .upload-icon {
+    width: 56px; height: 56px; background: var(--accent-dim);
+    border: 1px solid rgba(249,115,22,0.2);
+    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px; transition: all 0.2s;
+  }
+  .upload-icon svg { width: 24px; height: 24px; color: var(--accent); }
+  .upload-card h2 { font-size: 18px; font-weight: 600; color: var(--text-0); margin-bottom: 8px; }
+  .upload-card p { font-size: 13px; color: var(--text-1); line-height: 1.6; margin-bottom: 28px; }
+  .upload-drop-zone {
+    width: 100%; border: 1.5px dashed var(--border-mid);
+    border-radius: var(--radius-lg); padding: 32px 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    cursor: pointer; transition: all 0.2s; background: var(--bg-2);
+    margin-bottom: 20px;
+  }
+  .upload-drop-zone:hover, .upload-drop-zone.drag-over {
+    border-color: var(--accent); background: var(--accent-glow);
+  }
+  .upload-drop-zone span { font-size: 13px; color: var(--text-1); }
+  .upload-drop-zone strong { color: var(--accent); }
+  .upload-formats { font-size: 11px; color: var(--text-2); }
+
+  /* ─── PROCESSING SCREEN ───────────────────────────────── */
+  #processing-screen {
+    flex: 1; display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 20px;
+  }
+  .processing-spinner {
+    width: 36px; height: 36px; border: 2px solid var(--bg-3);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .processing-label { font-size: 13px; color: var(--text-1); }
+  .processing-file { font-size: 12px; color: var(--text-2); font-family: var(--mono); }
+
+  /* ─── TRANSCRIPT SCREEN ───────────────────────────────── */
+  #transcript-screen { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+
+  /* Player bar */
+  .player-bar {
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-1);
+    padding: 0 20px;
+    height: 60px; min-height: 60px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .play-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .play-btn:hover { background: #fb923c; transform: scale(1.05); }
+  .play-btn svg { width: 14px; height: 14px; color: #000; }
+  .time-display {
+    font-size: 12px; font-family: var(--mono); color: var(--text-1);
+    min-width: 90px; white-space: nowrap;
+  }
+  .time-display span { color: var(--text-0); }
+  .progress-track {
+    flex: 1; height: 3px; background: var(--bg-4);
+    border-radius: 2px; cursor: pointer; position: relative;
+    transition: height 0.15s;
+  }
+  .progress-track:hover { height: 5px; }
+  .progress-fill {
+    height: 100%; background: var(--accent); border-radius: 2px;
+    pointer-events: none; transition: width 0.05s;
+  }
+  .progress-thumb {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent); pointer-events: none;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .progress-track:hover .progress-thumb { opacity: 1; }
+  .speed-select {
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 4px 8px;
+    font-size: 11px; font-family: var(--mono); color: var(--text-1);
+    cursor: pointer; outline: none; transition: border-color 0.15s;
+  }
+  .speed-select:hover { border-color: var(--border-mid); color: var(--text-0); }
+
+  /* Toolbar */
+  .transcript-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 20px; border-bottom: 1px solid var(--border);
+    background: var(--bg-1);
+  }
+  .toolbar-label {
+    font-size: 11px; color: var(--text-2); font-weight: 500; letter-spacing: 0.05em;
+    text-transform: uppercase; margin-right: 4px;
+  }
+  .toolbar-spacer { flex: 1; }
+  .edit-count {
+    font-size: 11px; color: var(--text-2); font-family: var(--mono);
+    padding: 3px 8px; background: var(--bg-3); border-radius: 4px;
+  }
+  .edit-count.has-edits { color: var(--accent); }
+
+  /* Transcript body */
+  .transcript-body {
+    flex: 1; overflow-y: auto; padding: 32px 40px;
+    scroll-behavior: smooth;
+  }
+  .transcript-body::-webkit-scrollbar { width: 4px; }
+  .transcript-body::-webkit-scrollbar-track { background: transparent; }
+  .transcript-body::-webkit-scrollbar-thumb { background: var(--bg-4); border-radius: 2px; }
+
+  .segment {
+    display: flex; gap: 20px;
+    margin-bottom: 28px;
+    animation: fadeIn 0.3s ease both;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .segment-meta {
+    min-width: 80px; padding-top: 2px;
+    display: flex; flex-direction: column; gap: 3px; align-items: flex-end;
+  }
+  .speaker-badge {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 3px;
+    white-space: nowrap;
+  }
+  .speaker-0 { background: var(--accent-dim); color: var(--accent); }
+  .speaker-1 { background: var(--green-dim); color: var(--green); }
+  .speaker-2 { background: rgba(139,92,246,0.15); color: #a78bfa; }
+  .seg-time {
+    font-size: 10px; font-family: var(--mono); color: var(--text-2);
+    cursor: pointer; transition: color 0.12s;
+  }
+  .seg-time:hover { color: var(--accent); }
+
+  .segment-text {
+    flex: 1; font-size: 15px; line-height: 1.75; color: var(--text-0);
+    font-weight: 400;
+  }
+
+  /* Word spans */
+  .word {
+    display: inline;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.1s;
+    padding: 1px 1px;
+  }
+  .word:hover { background: rgba(255,255,255,0.06); }
+  .word.active {
+    background: var(--highlight);
+    outline: 1px solid var(--highlight-border);
+    color: #fff;
+  }
+  .word.edited { border-bottom: 1.5px solid var(--accent); }
+
+  /* Editable word */
+  .word-edit-input {
+    display: inline; background: var(--bg-3); border: 1px solid var(--accent);
+    border-radius: 3px; color: var(--text-0); font-family: var(--sans);
+    font-size: 15px; line-height: 1.75; outline: none;
+    padding: 0 2px; min-width: 20px;
+  }
+
+  /* Status bar */
+  .status-bar {
+    height: 28px; min-height: 28px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-1);
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 20px; font-size: 11px; color: var(--text-2);
+  }
+  .status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+  .status-bar .status-right { margin-left: auto; }
+
+  /* ─── EMPTY / ERROR STATES ────────────────────────────── */
+  .error-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-2); border: 1px solid rgba(239,68,68,0.3);
+    color: var(--red); font-size: 12px; font-family: var(--mono);
+    padding: 12px 18px; border-radius: var(--radius); z-index: 100; display: none;
+    animation: toastIn 0.2s ease; max-width: 640px; white-space: pre-wrap;
+    text-align: left; line-height: 1.6; word-break: break-word;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+  /* ─── SCROLLBAR GLOBAL ────────────────────────────────── */
+  * { scrollbar-width: thin; scrollbar-color: var(--bg-4) transparent; }
+
+  /* ─── EXPORT MENU ─────────────────────────────────────── */
+  .export-menu {
+    position: absolute; top: 44px; right: 0;
+    background: var(--bg-2); border: 1px solid var(--border-mid);
+    border-radius: var(--radius-lg); padding: 6px;
+    z-index: 50; min-width: 160px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    display: none;
+  }
+  .export-menu.open { display: block; }
+  .export-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: var(--radius);
+    font-size: 12px; color: var(--text-1); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .export-item:hover { background: var(--bg-3); color: var(--text-0); }
+  .export-item svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .export-wrap { position: relative; }
+
+  /* ─── SPEAKER POPOVER ────────────────────────────────── */
+  .speaker-popover {
+    position: fixed; z-index: 300;
+    background: var(--bg-2); border: 1px solid var(--border-mid);
+    border-radius: var(--radius-lg); padding: 6px;
+    min-width: 200px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    animation: toastIn 0.15s ease;
+  }
+  .sp-header {
+    padding: 6px 10px 8px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-2);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .sp-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: var(--radius);
+    font-size: 12px; color: var(--text-1); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .sp-item:hover { background: var(--bg-3); color: var(--text-0); }
+  .sp-item svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--text-2); }
+  .sp-item:hover svg { color: var(--text-0); }
+  .sp-divider { height: 1px; background: var(--border); margin: 4px 6px; }
+  .sp-assign-list { padding: 2px 0; }
+  .sp-assign-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: var(--radius);
+    font-size: 12px; color: var(--text-1); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .sp-assign-item:hover { background: var(--bg-3); color: var(--text-0); }
+  .sp-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .sp-rename-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px 6px;
+  }
+  .sp-rename-input {
+    flex: 1; background: var(--bg-3); border: 1px solid var(--border-mid);
+    border-radius: var(--radius); padding: 5px 8px;
+    font-size: 12px; font-family: var(--sans); color: var(--text-0);
+    outline: none; transition: border-color 0.15s;
+  }
+  .sp-rename-input:focus { border-color: var(--accent); }
+  .sp-rename-confirm {
+    background: var(--accent); border: none; border-radius: var(--radius);
+    padding: 5px 10px; font-size: 11px; font-weight: 600;
+    color: #000; cursor: pointer; white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .sp-rename-confirm:hover { background: #fb923c; }
+  .speaker-badge { cursor: pointer; transition: opacity 0.12s; }
+  .speaker-badge:hover { opacity: 0.8; }
+
+  /* Tooltip on word hover */
+  .word-tooltip {
+    position: fixed; background: var(--bg-3); border: 1px solid var(--border-mid);
+    border-radius: 4px; padding: 3px 8px; font-size: 10px; font-family: var(--mono);
+    color: var(--text-2); pointer-events: none; z-index: 200; display: none;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <a class="topbar-logo" href="#">
+      <div class="logo-mark">V</div>
+      VoxEdit
+    </a>
+    <div class="topbar-sep"></div>
+    <div class="topbar-title" id="topbar-filename">Drop an audio file to begin</div>
+    <div class="topbar-actions" id="topbar-actions">
+      <div class="export-wrap" id="export-wrap">
+        <button class="btn btn-ghost" onclick="toggleExportMenu()" style="display:none" id="export-btn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 10V2M5 7l3 3 3-3M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1"/></svg>
+          Export
+        </button>
+        <div class="export-menu" id="export-menu">
+          <div class="export-item" onclick="exportTxt()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4"/></svg>
+            Plain text (.txt)
+          </div>
+          <div class="export-item" onclick="exportSrt()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>
+            Subtitles (.srt)
+          </div>
+          <div class="export-item" onclick="exportJson()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2c-1 0-2 .9-2 2v8c0 1.1.9 2 2 2M12 2c1 0 2 .9 2 2v8c0 1.1-.9 2-2 2"/><path d="M6 10c.5.7 1.5.7 2 0s1.5.7 2 0"/></svg>
+            JSON with timestamps
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Model</div>
+      </div>
+      <div class="model-badge">
+        <div class="model-dot"></div>
+        <div>
+          <div class="model-name">voxtral-mini-latest</div>
+          <div style="font-size:10px;color:var(--text-2);margin-top:1px;">word timestamps</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">File info</div>
+        <div class="sidebar-stat"><span>Duration</span><span class="val" id="stat-duration">—</span></div>
+        <div class="sidebar-stat"><span>Words</span><span class="val" id="stat-words">—</span></div>
+        <div class="sidebar-stat"><span>Segments</span><span class="val" id="stat-segments">—</span></div>
+        <div class="sidebar-stat"><span>Speakers</span><span class="val" id="stat-speakers">—</span></div>
+        <div class="sidebar-stat"><span>Language</span><span class="val" id="stat-language">—</span></div>
+      </div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Edits</div>
+        <div class="sidebar-stat"><span>Modified words</span><span class="val" id="stat-edits">0</span></div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <div class="api-key-block">
+        <div class="api-key-label">Mistral API key</div>
+        <div class="api-key-input-wrap">
+          <input type="password" class="api-key-input" id="api-key-input" placeholder="sk-…" autocomplete="off"/>
+          <button class="api-key-toggle" onclick="toggleApiKeyVisibility()" id="api-key-toggle">
+            <svg id="eye-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EDITOR AREA -->
+    <div class="editor-area">
+
+      <!-- UPLOAD SCREEN -->
+      <div id="upload-screen">
+        <div class="upload-card">
+          <div class="upload-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 18V6M8 10l4-4 4 4"/>
+              <path d="M3 18v1a2 2 0 002 2h14a2 2 0 002-2v-1"/>
+            </svg>
+          </div>
+          <h2>Transcribe Audio</h2>
+          <p>Upload any audio file and Voxtral will transcribe it with<br/>word-level timestamps for synchronized editing.</p>
+
+          <div class="upload-drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.2" style="color:var(--text-2)">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/>
+            </svg>
+            <span>Drag &amp; drop your audio file here<br/>or <strong>click to browse</strong></span>
+            <div class="upload-formats">MP3 · WAV · M4A · FLAC · OGG · up to 3 hours</div>
+          </div>
+
+          <input type="file" id="file-input" accept="audio/*" style="display:none" onchange="handleFileSelect(this.files[0])"/>
+        </div>
+      </div>
+
+      <!-- PROCESSING SCREEN -->
+      <div id="processing-screen">
+        <div class="processing-spinner"></div>
+        <div class="processing-label">Transcribing audio…</div>
+        <div class="processing-file" id="processing-filename"></div>
+      </div>
+
+      <!-- TRANSCRIPT SCREEN -->
+      <div id="transcript-screen">
+
+        <!-- PLAYER BAR -->
+        <div class="player-bar">
+          <button class="play-btn" id="play-btn" onclick="togglePlay()">
+            <svg id="play-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2l10 6-10 6V2z"/></svg>
+          </button>
+          <div class="time-display">
+            <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+          </div>
+          <div class="progress-track" id="progress-track" onclick="seekAudio(event)">
+            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+            <div class="progress-thumb" id="progress-thumb" style="left:0%"></div>
+          </div>
+          <select class="speed-select" onchange="changeSpeed(this.value)">
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="1" selected>1×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+        </div>
+
+        <!-- TRANSCRIPT TOOLBAR -->
+        <div class="transcript-toolbar">
+          <span class="toolbar-label">Transcript</span>
+          <button class="btn btn-ghost" onclick="autoScroll=!autoScroll; this.style.color=autoScroll?'var(--accent)':''" style="font-size:11px;padding:4px 10px;">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M4 10l4 4 4-4"/></svg>
+            Auto-scroll
+          </button>
+          <div class="toolbar-spacer"></div>
+          <div class="edit-count" id="edit-count">0 edits</div>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="resetEdits()">Reset</button>
+          <button class="btn btn-ghost" id="copy-btn" style="font-size:11px;padding:4px 10px;" onclick="copyTranscript()">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5"/></svg>
+            Copy
+          </button>
+        </div>
+
+        <!-- TRANSCRIPT BODY -->
+        <div class="transcript-body" id="transcript-body"></div>
+
+        <!-- STATUS BAR -->
+        <div class="status-bar">
+          <div class="status-dot"></div>
+          <span>Click any word to seek · Double-click to edit</span>
+          <span class="status-right" id="status-right">Ready</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- AUDIO ELEMENT -->
+<audio id="audio-player"></audio>
+
+<!-- TOOLTIP -->
+<div class="word-tooltip" id="word-tooltip"></div>
+
+<!-- ERROR TOAST -->
+<div class="error-toast" id="error-toast"></div>
+
+<script>
+// ─── STATE ─────────────────────────────────────────────────────
+let wordsData = [];        // [{word, start, end, segIdx, wordIdx, edited}]
+let segments = [];         // [{speaker, speakerClass, start, words:[...]}]
+let speakerNames = {};     // {speakerClass -> display name}, e.g. {0: "Alice", 1: "Bob"}
+let speakerClassCount = 0; // total unique speakerClasses seen
+let audioFile = null;
+let editCount = 0;
+let autoScroll = true;
+let rafId = null;
+let activeWordEl = null;
+
+const audio = document.getElementById('audio-player');
+
+// ─── FILE HANDLING ──────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('audio/')) handleFileSelect(f);
+  else showError('Please drop an audio file (MP3, WAV, M4A, etc.)');
+});
+
+function handleFileSelect(file) {
+  if (!file) return;
+  audioFile = file;
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { showError('Please enter your Mistral API key in the sidebar first.'); return; }
+  startTranscription(file, key);
+}
+
+// ─── TRANSCRIPTION ──────────────────────────────────────────────
+async function apiCall(file, apiKey, extraParams) {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  fd.append('model', 'voxtral-mini-latest');
+  for (const [k, v] of Object.entries(extraParams)) fd.append(k, v);
+  const res = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    body: fd
+  });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const j = await res.json();
+      if (typeof j.message === 'string') msg = j.message;
+      else if (typeof j.error === 'string') msg = j.error;
+      else if (j.error?.message) msg = j.error.message;
+      else msg = JSON.stringify(j, null, 2);
+    } catch(_) {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+async function startTranscription(file, apiKey) {
+  showScreen('processing');
+  document.getElementById('processing-filename').textContent = file.name;
+  document.querySelector('.processing-label').textContent = 'Transcribing audio… (1/2)';
+
+  // Set up audio player immediately
+  audio.src = URL.createObjectURL(file);
+  audio.load();
+
+  try {
+    // Call 1: word-level timestamps (for sync highlighting)
+    const wordData = await apiCall(file, apiKey, { timestamp_granularities: 'word' });
+
+    document.querySelector('.processing-label').textContent = 'Identifying speakers… (2/2)';
+
+    // Call 2: diarization with segment timestamps (for speaker labels)
+    // Run in parallel-ish — start it right after call 1 resolves
+    let diarData = null;
+    try {
+      diarData = await apiCall(file, apiKey, {
+        timestamp_granularities: 'segment',
+        diarize: 'true'
+      });
+    } catch(e) {
+      // Diarization is best-effort — if it fails, continue without it
+      console.warn('Diarization call failed, continuing without speakers:', e.message);
+    }
+
+    processTranscription(wordData, diarData, file.name);
+
+  } catch (err) {
+    showScreen('upload');
+    showError('Transcription failed: ' + err.message);
+  }
+}
+
+
+function processTranscription(wordData, diarData, filename) {
+  segments = [];
+  wordsData = [];
+
+  // ── Build a speaker lookup from diarization response ──────────────────
+  // diarData.segments: [{start, end, speaker_id, text}]
+  // For each word timestamp, find which diar segment it falls in.
+  const diarSegs = (diarData && diarData.segments) ? diarData.segments : [];
+
+  function speakerAt(t) {
+    // Binary search diar segments for time t
+    let lo = 0, hi = diarSegs.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const s = diarSegs[mid];
+      if (t < s.start) hi = mid - 1;
+      else if (t > s.end) lo = mid + 1;
+      else return String(s.speaker_id ?? s.speaker ?? 0);
+    }
+    // Fall back to closest segment
+    if (hi >= 0) return String(diarSegs[hi].speaker_id ?? diarSegs[hi].speaker ?? 0);
+    return '0';
+  }
+
+  // ── Build segments + words from word-level data ───────────────────────
+  const segs = wordData.segments || [];
+  let speakerColors = {};
+  let speakerCount = 0;
+  speakerNames = {};
+  speakerClassCount = 0;
+
+  segs.forEach((seg, si) => {
+    let words;
+    const hasWordTimestamps = Array.isArray(seg.words) && seg.words.length > 0 && seg.words[0].start !== undefined;
+
+    if (hasWordTimestamps) {
+      words = seg.words.map((w, wi) => ({
+        word: w.word, start: w.start, end: w.end,
+        segIdx: si, wordIdx: wi, edited: false, originalWord: w.word
+      }));
+    } else {
+      const rawWords = (seg.text || '').trim().split(/\s+/).filter(Boolean);
+      const segStart = seg.start || 0;
+      const segEnd = seg.end || segStart + 1;
+      const wordDur = rawWords.length > 0 ? (segEnd - segStart) / rawWords.length : 1;
+      words = rawWords.map((w, wi) => ({
+        word: w,
+        start: parseFloat((segStart + wi * wordDur).toFixed(3)),
+        end: parseFloat((segStart + (wi + 1) * wordDur).toFixed(3)),
+        segIdx: si, wordIdx: wi, edited: false, originalWord: w
+      }));
+    }
+
+    // Assign speaker by looking up the midpoint of this segment in diar data
+    const midT = words.length > 0 ? (words[0].start + words[words.length-1].end) / 2 : (seg.start || 0);
+    const spk = diarSegs.length > 0 ? speakerAt(midT) : (seg.speaker !== undefined ? String(seg.speaker) : '0');
+    if (!(spk in speakerColors)) { speakerColors[spk] = speakerCount++; speakerClassCount = speakerCount; }
+
+    segments.push({ speaker: spk, speakerClass: speakerColors[spk], start: seg.start || 0, words });
+    wordsData.push(...words);
+  });
+
+  // Update sidebar stats
+  const numSpeakers = Object.keys(speakerColors).length;
+  document.getElementById('stat-words').textContent = wordsData.length.toLocaleString();
+  document.getElementById('stat-segments').textContent = segments.length;
+  document.getElementById('stat-speakers').textContent = diarSegs.length > 0 ? numSpeakers : (numSpeakers > 1 ? numSpeakers : '—');
+  document.getElementById('stat-language').textContent = wordData.language || 'auto';
+  document.getElementById('topbar-filename').innerHTML = `<span>${escHtml(filename)}</span>`;
+
+  renderTranscript();
+  showScreen('transcript');
+  document.getElementById('export-btn').style.display = '';
+  startSync();
+}
+
+// ─── DEMO / MOCK DATA (used when API key is "demo") ────────────
+function loadDemoData() {
+  const demoText = [
+    { speaker: '0', words: [
+      {word:'Good',start:0.0,end:0.3},{word:'morning',start:0.35,end:0.7},{word:'everyone,',start:0.75,end:1.1},
+      {word:'today',start:1.2,end:1.5},{word:"we're",start:1.55,end:1.8},{word:'going',start:1.85,end:2.0},
+      {word:'to',start:2.05,end:2.15},{word:'talk',start:2.2,end:2.45},{word:'about',start:2.5,end:2.75},
+      {word:'the',start:2.8,end:2.9},{word:'new',start:2.95,end:3.15},{word:'Voxtral',start:3.2,end:3.7},
+      {word:'transcription',start:3.75,end:4.4},{word:'API.',start:4.45,end:4.8},
+    ]},
+    { speaker: '1', words: [
+      {word:'That',start:5.1,end:5.3},{word:'sounds',start:5.35,end:5.65},{word:'fascinating.',start:5.7,end:6.2},
+      {word:'Can',start:6.3,end:6.45},{word:'you',start:6.5,end:6.6},{word:'tell',start:6.65,end:6.85},
+      {word:'us',start:6.9,end:7.0},{word:'more',start:7.05,end:7.3},{word:'about',start:7.35,end:7.6},
+      {word:'the',start:7.65,end:7.75},{word:'word-level',start:7.8,end:8.3},{word:'timestamp',start:8.35,end:8.8},
+      {word:'feature?',start:8.85,end:9.3},
+    ]},
+    { speaker: '0', words: [
+      {word:'Absolutely.',start:9.6,end:10.1},{word:'Every',start:10.2,end:10.45},{word:'single',start:10.5,end:10.75},
+      {word:'word',start:10.8,end:11.0},{word:'in',start:11.05,end:11.15},{word:'the',start:11.2,end:11.3},
+      {word:'transcript',start:11.35,end:11.85},{word:'gets',start:11.9,end:12.1},{word:'its',start:12.15,end:12.3},
+      {word:'own',start:12.35,end:12.55},{word:'start',start:12.6,end:12.85},{word:'and',start:12.9,end:13.0},
+      {word:'end',start:13.05,end:13.2},{word:'timestamp,',start:13.25,end:13.7},{word:'which',start:13.8,end:14.0},
+      {word:'makes',start:14.05,end:14.3},{word:'this',start:14.35,end:14.5},{word:'kind',start:14.55,end:14.75},
+      {word:'of',start:14.8,end:14.9},{word:'synchronized',start:14.95,end:15.6},{word:'editing',start:15.65,end:16.0},
+      {word:'possible.',start:16.05,end:16.55},
+    ]},
+  ];
+
+  segments = [];
+  wordsData = [];
+
+  demoText.forEach((seg, si) => {
+    const words = seg.words.map((w, wi) => ({
+      word: w.word, start: w.start, end: w.end,
+      segIdx: si, wordIdx: wi, edited: false, originalWord: w.word
+    }));
+    segments.push({ speaker: seg.speaker, speakerClass: parseInt(seg.speaker) || 0, start: seg.words[0].start, words });
+    wordsData.push(...words);
+  });
+
+  // Fake audio with duration
+  document.getElementById('stat-words').textContent = wordsData.length;
+  document.getElementById('stat-segments').textContent = segments.length;
+  document.getElementById('stat-speakers').textContent = 2;
+  document.getElementById('stat-language').textContent = 'en';
+  document.getElementById('topbar-filename').innerHTML = '<span>demo_audio.mp3</span>';
+  document.getElementById('stat-duration').textContent = '0:17';
+  document.getElementById('total-time').textContent = '0:17';
+
+  renderTranscript();
+  showScreen('transcript');
+  document.getElementById('export-btn').style.display = '';
+  startSync();
+}
+
+// Patch handleFileSelect to support demo mode
+const _origHandle = handleFileSelect;
+function handleFileSelect(file) {
+  if (!file) return;
+  audioFile = file;
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { showError('Please enter your Mistral API key in the sidebar first.'); return; }
+  if (key === 'demo') { loadDemoData(); return; }
+  startTranscription(file, key);
+}
+
+// ─── SPEAKER POPOVER ────────────────────────────────────────────
+let activeSpeakerPopover = null;
+
+function closeSpeakerPopover() {
+  if (activeSpeakerPopover) {
+    activeSpeakerPopover.remove();
+    activeSpeakerPopover = null;
+  }
+}
+document.addEventListener('click', closeSpeakerPopover);
+
+function getSpeakerDotColor(sc) {
+  const colors = ['#f97316','#22c55e','#a78bfa','#38bdf8','#f472b6','#fb923c'];
+  return colors[sc % colors.length];
+}
+
+function showSpeakerPopover(e, speakerClass) {
+  closeSpeakerPopover();
+
+  const pop = document.createElement('div');
+  pop.className = 'speaker-popover';
+  pop.onclick = ev => ev.stopPropagation();
+
+  const currentName = speakerNames[speakerClass] || `SPEAKER ${speakerClass + 1}`;
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'sp-header';
+  hdr.textContent = currentName;
+  pop.appendChild(hdr);
+
+  // ── Rename option ──────────────────────────────────────────
+  const renameRow = document.createElement('div');
+  renameRow.className = 'sp-item';
+  renameRow.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 2l3 3-8 8H3v-3L11 2z"/></svg> Rename`;
+  pop.appendChild(renameRow);
+
+  // Inline rename input (hidden until clicked)
+  const renameInputRow = document.createElement('div');
+  renameInputRow.className = 'sp-rename-row';
+  renameInputRow.style.display = 'none';
+  const inp = document.createElement('input');
+  inp.className = 'sp-rename-input';
+  inp.placeholder = currentName;
+  inp.value = currentName;
+  const confirmBtn = document.createElement('button');
+  confirmBtn.className = 'sp-rename-confirm';
+  confirmBtn.textContent = 'Save';
+  renameInputRow.appendChild(inp);
+  renameInputRow.appendChild(confirmBtn);
+  pop.appendChild(renameInputRow);
+
+  renameRow.onclick = () => {
+    renameRow.style.display = 'none';
+    renameInputRow.style.display = 'flex';
+    inp.focus();
+    inp.select();
+  };
+
+  function doRename() {
+    const name = inp.value.trim();
+    if (!name) return;
+    speakerNames[speakerClass] = name;
+    // Update every badge with this speakerClass
+    document.querySelectorAll(`.speaker-badge[data-speaker-class="${speakerClass}"]`).forEach(b => {
+      b.textContent = name;
+    });
+    closeSpeakerPopover();
+  }
+  confirmBtn.onclick = doRename;
+  inp.onkeydown = ev => { if (ev.key === 'Enter') doRename(); if (ev.key === 'Escape') closeSpeakerPopover(); };
+
+  // ── Reassign option (only if >1 speaker exists) ───────────────
+  const allClasses = [...new Set(segments.map(s => s.speakerClass))].sort();
+  if (allClasses.length > 1) {
+    const div = document.createElement('div');
+    div.className = 'sp-divider';
+    pop.appendChild(div);
+
+    const assignHdr = document.createElement('div');
+    assignHdr.className = 'sp-header';
+    assignHdr.textContent = 'Reassign to';
+    pop.appendChild(assignHdr);
+
+    const assignList = document.createElement('div');
+    assignList.className = 'sp-assign-list';
+
+    allClasses.filter(sc => sc !== speakerClass).forEach(sc => {
+      const item = document.createElement('div');
+      item.className = 'sp-assign-item';
+      const dot = document.createElement('div');
+      dot.className = 'sp-dot';
+      dot.style.background = getSpeakerDotColor(sc);
+      const label = document.createElement('span');
+      label.textContent = speakerNames[sc] || `SPEAKER ${sc + 1}`;
+      item.appendChild(dot);
+      item.appendChild(label);
+      item.onclick = () => {
+        // Move all paragraphs with speakerClass to target sc
+        reassignSpeaker(speakerClass, sc);
+        closeSpeakerPopover();
+      };
+      assignList.appendChild(item);
+    });
+
+    pop.appendChild(assignList);
+  }
+
+  // Position near the badge
+  document.body.appendChild(pop);
+  activeSpeakerPopover = pop;
+
+  const rect = e.target.getBoundingClientRect();
+  const pw = pop.offsetWidth || 200;
+  const ph = pop.offsetHeight || 160;
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+  if (top + ph > window.innerHeight - 12) top = rect.top - ph - 6;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+
+function reassignSpeaker(fromClass, toClass) {
+  // Update all segments with fromClass -> toClass
+  segments.forEach(seg => {
+    if (seg.speakerClass === fromClass) {
+      seg.speakerClass = toClass;
+      seg.speaker = String(toClass);
+    }
+  });
+  // Re-render to reflect changes (preserves wordsData edits)
+  renderTranscript();
+}
+
+// ─── RENDER ─────────────────────────────────────────────────────
+function renderTranscript() {
+  const body = document.getElementById('transcript-body');
+  body.innerHTML = '';
+
+  // Build paragraphs directly from the flat wordsData array.
+  // Break a paragraph on: pause > 1.5s between consecutive words, or every 60 words.
+  const PAUSE_THRESHOLD = 1.5;
+  const MAX_PARA_WORDS = 60;
+
+  const paragraphs = []; // [{speaker, speakerClass, start, words:[{...w, segIdx, wordIdx}]}]
+  let curPara = null;
+
+  wordsData.forEach((w, i) => {
+    const prev = i > 0 ? wordsData[i - 1] : null;
+    const gap = prev ? Math.max(0, w.start - prev.end) : 999;
+    const speakerChange = prev && segments[w.segIdx].speaker !== segments[prev.segIdx].speaker;
+    const tooLong = curPara && curPara.words.length >= MAX_PARA_WORDS;
+
+    if (!curPara || gap > PAUSE_THRESHOLD || speakerChange || tooLong) {
+      const seg = segments[w.segIdx];
+      curPara = { speaker: seg.speaker, speakerClass: seg.speakerClass, start: w.start, words: [] };
+      paragraphs.push(curPara);
+    }
+    curPara.words.push(w);
+  });
+
+  paragraphs.forEach((para, pi) => {
+    const div = document.createElement('div');
+    div.className = 'segment';
+    div.style.animationDelay = (pi * 0.05) + 's';
+    div.dataset.speaker = para.speaker;
+
+    // Meta
+    const meta = document.createElement('div');
+    meta.className = 'segment-meta';
+    const badge = document.createElement('div');
+    badge.className = `speaker-badge speaker-${para.speakerClass % 3}`;
+    badge.dataset.speakerClass = para.speakerClass;
+    badge.textContent = speakerNames[para.speakerClass] || `SPEAKER ${para.speakerClass + 1}`;
+    badge.onclick = (e) => { e.stopPropagation(); showSpeakerPopover(e, para.speakerClass); };
+    const timeEl = document.createElement('div');
+    timeEl.className = 'seg-time';
+    timeEl.textContent = formatTime(para.start);
+    timeEl.onclick = () => { if (audio.src) audio.currentTime = para.start; };
+    meta.appendChild(badge);
+    meta.appendChild(timeEl);
+
+    // Text — all words in this paragraph, inline
+    const textDiv = document.createElement('div');
+    textDiv.className = 'segment-text';
+
+    para.words.forEach((w, idx) => {
+      const si = w.segIdx;
+      const wi = w.wordIdx;
+      const span = document.createElement('span');
+      span.className = 'word' + (w.edited ? ' edited' : '');
+      span.dataset.segIdx = si;
+      span.dataset.wordIdx = wi;
+      span.dataset.start = w.start;
+      span.dataset.end = w.end;
+      span.textContent = (idx === 0 ? '' : ' ') + w.word;
+
+      span.onclick = (e) => {
+        if (audio.src && e.detail === 1) audio.currentTime = w.start;
+      };
+      span.ondblclick = () => startEditing(span, si, wi);
+
+      span.onmouseenter = (e) => {
+        const tt = document.getElementById('word-tooltip');
+        tt.textContent = `${formatTime(w.start)} → ${formatTime(w.end)}`;
+        tt.style.display = 'block';
+        tt.style.left = (e.clientX + 10) + 'px';
+          tt.style.top = (e.clientY - 28) + 'px';
+        };
+        span.onmousemove = (e) => {
+          const tt = document.getElementById('word-tooltip');
+          tt.style.left = (e.clientX + 10) + 'px';
+          tt.style.top = (e.clientY - 28) + 'px';
+        };
+        span.onmouseleave = () => { document.getElementById('word-tooltip').style.display = 'none'; };
+
+      textDiv.appendChild(span);
+    });
+
+    div.appendChild(meta);
+    div.appendChild(textDiv);
+    body.appendChild(div);
+  });
+}
+
+// ─── EDITING ────────────────────────────────────────────────────
+function startEditing(span, si, wi) {
+  const word = segments[si].words[wi];
+  const input = document.createElement('input');
+  input.className = 'word-edit-input';
+  input.value = word.word;
+  input.style.width = Math.max(40, word.word.length * 9) + 'px';
+
+  const hadSpace = span.textContent.startsWith(' ');
+  span.style.display = 'none';
+
+  const wrapper = document.createElement('span');
+  wrapper.style.display = 'inline';
+  if (hadSpace) wrapper.appendChild(document.createTextNode(' '));
+  wrapper.appendChild(input);
+  span.parentNode.insertBefore(wrapper, span);
+  input.focus();
+  input.select();
+
+  function commit() {
+    const newVal = input.value.trim() || word.word;
+    const changed = newVal !== word.originalWord;
+    word.word = newVal;
+    word.edited = changed;
+
+    span.textContent = (hadSpace ? ' ' : '') + newVal;
+    span.className = 'word' + (changed ? ' edited' : '');
+
+    // Rebuild data-start/end
+    span.dataset.start = word.start;
+    span.dataset.end = word.end;
+
+    wrapper.remove();
+    span.style.display = '';
+
+    // Re-attach listeners
+    span.onclick = (e) => { if (audio.src && e.detail === 1) audio.currentTime = word.start; };
+    span.ondblclick = () => startEditing(span, si, wi);
+
+    updateEditCount();
+  }
+
+  input.onblur = commit;
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') { input.blur(); }
+    if (e.key === 'Escape') { input.value = word.word; input.blur(); }
+  };
+}
+
+function updateEditCount() {
+  editCount = wordsData.filter(w => w.edited).length;
+  document.getElementById('stat-edits').textContent = editCount;
+  const el = document.getElementById('edit-count');
+  el.textContent = editCount + (editCount === 1 ? ' edit' : ' edits');
+  el.className = 'edit-count' + (editCount > 0 ? ' has-edits' : '');
+}
+
+function resetEdits() {
+  segments.forEach(seg => {
+    seg.words.forEach(w => {
+      w.word = w.originalWord;
+      w.edited = false;
+    });
+  });
+  editCount = 0;
+  updateEditCount();
+  renderTranscript();
+  startSync();
+}
+
+// ─── AUDIO SYNC ─────────────────────────────────────────────────
+audio.addEventListener('loadedmetadata', () => {
+  document.getElementById('stat-duration').textContent = formatTime(audio.duration);
+  document.getElementById('total-time').textContent = formatTime(audio.duration);
+});
+
+audio.addEventListener('ended', () => {
+  document.getElementById('play-icon').innerHTML = '<path d="M4 2l10 6-10 6V2z"/>';
+});
+
+function togglePlay() {
+  if (!audio.src) return;
+  if (audio.paused) {
+    audio.play();
+    document.getElementById('play-icon').innerHTML = '<rect x="3" y="2" width="4" height="12" rx="1"/><rect x="9" y="2" width="4" height="12" rx="1"/>';
+  } else {
+    audio.pause();
+    document.getElementById('play-icon').innerHTML = '<path d="M4 2l10 6-10 6V2z"/>';
+  }
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+});
+
+function changeSpeed(v) { audio.playbackRate = parseFloat(v); }
+
+function seekAudio(e) {
+  if (!audio.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+}
+
+// Binary search: find the word whose [start,end] bracket contains t
+function findActiveWord(t) {
+  let lo = 0, hi = wordsData.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const w = wordsData[mid];
+    if (t < w.start) { hi = mid - 1; }
+    else if (t > w.end) { lo = mid + 1; }
+    else { return w; }
+  }
+  // t falls in a gap — return the word whose start is closest and just <= t
+  if (hi >= 0 && wordsData[hi].start <= t) return wordsData[hi];
+  return null;
+}
+
+function startSync() {
+  if (rafId) cancelAnimationFrame(rafId);
+  let lastSeekTime = -1;   // audio.currentTime at last seek event
+  let seekWallTime = -1;   // performance.now() at last seek event
+
+  // Listen for seeks so we can ignore the brief stale-currentTime window
+  audio.addEventListener('seeking', () => {
+    lastSeekTime = audio.currentTime;
+    seekWallTime = performance.now();
+  }, { passive: true });
+
+  function tick() {
+    // After a seek, audio.currentTime can lag behind by ~100-300ms before
+    // the decoder catches up. Guard: if we are within 400ms of a seek and
+    // currentTime hasn't moved yet, use lastSeekTime instead.
+    let t = audio.currentTime;
+    if (seekWallTime > 0 && performance.now() - seekWallTime < 400 && Math.abs(t - lastSeekTime) < 0.05) {
+      t = lastSeekTime;
+    }
+
+    const dur = audio.duration || 0;
+    if (dur > 0) {
+      const pct = (t / dur * 100).toFixed(2);
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-thumb').style.left = pct + '%';
+    }
+    document.getElementById('current-time').textContent = formatTime(t);
+    document.getElementById('status-right').textContent = formatTime(t);
+
+    // Highlight active word using binary search
+    const active = findActiveWord(t);
+    if (active) {
+      const selector = `.word[data-seg-idx="${active.segIdx}"][data-word-idx="${active.wordIdx}"]`;
+      const el = document.querySelector(selector);
+      if (el && el !== activeWordEl) {
+        if (activeWordEl) activeWordEl.classList.remove('active');
+        el.classList.add('active');
+        activeWordEl = el;
+        if (autoScroll) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else {
+      if (activeWordEl) { activeWordEl.classList.remove('active'); activeWordEl = null; }
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+// ─── COPY TO CLIPBOARD ──────────────────────────────────────────
+function copyTranscript() {
+  const body = document.getElementById('transcript-body');
+  const blocks = body.querySelectorAll('.segment');
+  const parts = Array.from(blocks).map(block => {
+    const speaker = block.querySelector('.speaker-badge')?.innerText?.trim() || 'SPEAKER 1';
+    const time    = block.querySelector('.seg-time')?.innerText?.trim() || '';
+    // innerText on segment-text collapses the inline word spans into plain text
+    const text    = block.querySelector('.segment-text')?.innerText?.replace(/\s+/g, ' ').trim() || '';
+    return `${speaker}  ${time}\n${text}`;
+  });
+  const output = parts.join('\n\n');
+
+  function flash() {
+    const btn = document.getElementById('copy-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l4 4 8-8"/></svg> Copied!`;
+    btn.style.color = 'var(--green)';
+    btn.style.borderColor = 'var(--green)';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+  }
+
+  navigator.clipboard.writeText(output).then(flash).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = output;
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    flash();
+  });
+}
+
+// ─── EXPORT ─────────────────────────────────────────────────────
+function toggleExportMenu() {
+  document.getElementById('export-menu').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#export-wrap')) document.getElementById('export-menu').classList.remove('open');
+});
+
+function getTranscriptText() {
+  // Same format as copyTranscript: SPEAKER N  timestamp\ntext
+  const body = document.getElementById('transcript-body');
+  const blocks = body.querySelectorAll('.segment');
+  return Array.from(blocks).map(block => {
+    const speaker = block.querySelector('.speaker-badge')?.innerText?.trim() || '';
+    const time    = block.querySelector('.seg-time')?.innerText?.trim() || '';
+    const text    = block.querySelector('.segment-text')?.innerText?.trim() || '';
+    return `${speaker}  ${time}\n${text}`;
+  }).join('\n\n');
+}
+
+function exportTxt() {
+  download('transcript.txt', getTranscriptText(), 'text/plain');
+  document.getElementById('export-menu').classList.remove('open');
+}
+
+function exportSrt() {
+  let idx = 1;
+  let srt = '';
+  segments.forEach(seg => {
+    // Group into ~10-word chunks
+    const chunkSize = 10;
+    for (let i = 0; i < seg.words.length; i += chunkSize) {
+      const chunk = seg.words.slice(i, i + chunkSize);
+      const start = chunk[0].start;
+      const end = chunk[chunk.length - 1].end;
+      srt += `${idx++}\n${toSrtTime(start)} --> ${toSrtTime(end)}\n${chunk.map(w=>w.word).join(' ')}\n\n`;
+    }
+  });
+  download('transcript.srt', srt, 'text/plain');
+  document.getElementById('export-menu').classList.remove('open');
+}
+
+function exportJson() {
+  const out = segments.map(seg => ({
+    speaker: seg.speaker,
+    start: seg.start,
+    words: seg.words.map(w => ({ word: w.word, start: w.start, end: w.end, edited: w.edited }))
+  }));
+  download('transcript.json', JSON.stringify(out, null, 2), 'application/json');
+  document.getElementById('export-menu').classList.remove('open');
+}
+
+function download(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type}));
+  a.download = name; a.click();
+}
+
+function toSrtTime(s) {
+  const h = Math.floor(s/3600).toString().padStart(2,'0');
+  const m = Math.floor((s%3600)/60).toString().padStart(2,'0');
+  const sec = Math.floor(s%60).toString().padStart(2,'0');
+  const ms = Math.round((s%1)*1000).toString().padStart(3,'0');
+  return `${h}:${m}:${sec},${ms}`;
+}
+
+// ─── SCREENS ────────────────────────────────────────────────────
+function showScreen(name) {
+  document.getElementById('upload-screen').style.display = name === 'upload' ? 'flex' : 'none';
+  document.getElementById('processing-screen').style.display = name === 'processing' ? 'flex' : 'none';
+  document.getElementById('transcript-screen').style.display = name === 'transcript' ? 'flex' : 'none';
+}
+
+// ─── UTILS ──────────────────────────────────────────────────────
+function formatTime(s) {
+  if (!s && s !== 0) return '—';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60).toString().padStart(2, '0');
+  return `${m}:${sec}`;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+function toggleApiKeyVisibility() {
+  const inp = document.getElementById('api-key-input');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ─── INIT ────────────────────────────────────────────────────────
+showScreen('upload');
+</script>
+</body>
+</html>
