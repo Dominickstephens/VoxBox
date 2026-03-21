@@ -102,6 +102,10 @@ function handleReattachAudio(file) {
       .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
       .then(decoded => drawWaveform(decoded))
       .catch(() => {});
+    // Save to IndexedDB so future history loads don't need re-attach
+    dbLoadAudio(f.name).then(existing => {
+      if (!existing) dbSaveAudio(f.name, f);
+    }).catch(() => dbSaveAudio(f.name, f));
     hideNoAudioBar();
     showUndoToast('Audio attached');
   }
