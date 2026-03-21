@@ -273,7 +273,7 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
 <div id="app">
 
   <div class="topbar">
-    <a class="topbar-logo" href="#"><div class="logo-mark">V</div>VoxBox</a>
+    <a class="topbar-logo" href="#" onclick="event.preventDefault(); goBack()"><div class="logo-mark">V</div>VoxBox</a>
     <div class="topbar-sep"></div>
     <div class="topbar-title" id="topbar-filename">Drop an audio file to begin</div>
     <div class="topbar-actions">
