@@ -291,13 +291,16 @@ function showSpeakerPopover(e, speakerClass, paraFirstWordIdx, paraLastWordIdx) 
 }
 
 function reassignSpeaker(fromClass, toClass) {
+  const before = serializeSegments();
   segments.forEach(seg => { if (seg.speakerClass === fromClass) { seg.speakerClass = toClass; seg.speaker = String(toClass); } });
+  undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
   renderTranscript();
   updateSpeakerStat();
   saveToDB();
 }
 
 function createAndAssignSpeaker(paraFirstWordIdx, paraLastWordIdx, newClass) {
+  const before = serializeSegments();
   const paraWords = wordsData.slice(paraFirstWordIdx, paraLastWordIdx + 1);
   const segIdxsInPara = new Set(paraWords.map(w => w.segIdx));
   segIdxsInPara.forEach(si => {
@@ -305,6 +308,7 @@ function createAndAssignSpeaker(paraFirstWordIdx, paraLastWordIdx, newClass) {
     segments[si].speaker = String(newClass);
   });
   speakerNames[newClass] = `SPEAKER ${newClass + 1}`;
+  undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
   renderTranscript();
   updateSpeakerStat();
   saveToDB();
@@ -321,9 +325,14 @@ function renderTranscript() {
     const prev = wordsData[i - 1];
     const gap  = prev ? Math.max(0, w.start - prev.end) : 999;
     const spkChange = prev && segments[w.segIdx].speaker !== segments[prev.segIdx].speaker;
-    if (!cur || gap > PAUSE || spkChange || cur.words.length >= MAX) {
+    const forceSplit = w.splitBefore === true;
+    const forceMerge = w.mergeBefore === true;
+    const autoBreak  = !cur || gap > PAUSE || spkChange || cur.words.length >= MAX;
+    const shouldBreak = forceSplit || (!forceMerge && autoBreak);
+
+    if (shouldBreak) {
       const seg = segments[w.segIdx];
-      cur = { speaker: seg.speaker, speakerClass: seg.speakerClass, start: w.start, words: [] };
+      cur = { speaker: seg.speaker, speakerClass: seg.speakerClass, start: w.start, words: [], paraIdx: paras.length };
       paras.push(cur);
     }
     cur.words.push(w);
@@ -350,20 +359,29 @@ function renderTranscript() {
     const textDiv = document.createElement('div'); textDiv.className = 'segment-text';
     para.words.forEach((w, idx) => {
       const si = w.segIdx, wi = w.wordIdx;
+      const globalIdx = paraFirstWordIdx + idx;
       const span = document.createElement('span');
       span.className = 'word' + (w.edited ? ' edited' : '');
       span.dataset.segIdx = si; span.dataset.wordIdx = wi;
       span.dataset.start = w.start; span.dataset.end = w.end;
       span.textContent = (idx === 0 ? '' : ' ') + w.word;
-      span.onclick    = ev => { if (audio.src && ev.detail === 1) audio.currentTime = w.start; };
-      span.ondblclick = ()  => startEditing(span, si, wi);
+      span.onclick = ev => {
+        if (ev.detail !== 1) return;
+        // If there's a paragraph above this one, offer merge-up on single click
+        if (pi > 0 && !selMenu) {
+          showMergePopover(ev, globalIdx, paraFirstWordIdx, paraLastWordIdx, pi);
+          return;
+        }
+        if (audio.src) audio.currentTime = w.start;
+      };
+      span.ondblclick = () => { closeMergePopover(); startEditing(span, si, wi); };
       span.onmouseenter = ev => {
         const tt = document.getElementById('word-tooltip');
         tt.textContent = `${formatTime(w.start)} → ${formatTime(w.end)}`;
         tt.style.display = 'block'; tt.style.left = (ev.clientX + 10) + 'px'; tt.style.top = (ev.clientY - 28) + 'px';
       };
       span.onmousemove  = ev => { const tt = document.getElementById('word-tooltip'); tt.style.left = (ev.clientX + 10) + 'px'; tt.style.top = (ev.clientY - 28) + 'px'; };
-      span.onmouseleave = ()  => { document.getElementById('word-tooltip').style.display = 'none'; };
+      span.onmouseleave = () => { document.getElementById('word-tooltip').style.display = 'none'; };
       textDiv.appendChild(span);
     });
 
@@ -389,7 +407,7 @@ function startEditing(span, si, wi) {
 
   function commit() {
     const newVal = input.value.trim() || before;
-    if (newVal !== before) { undoStack.push({ segIdx: si, wordIdx: wi, before, after: newVal }); redoStack = []; updateUndoButtons(); }
+    if (newVal !== before) { undoStack.push({ type: 'word', segIdx: si, wordIdx: wi, before, after: newVal }); redoStack = []; updateUndoButtons(); }
     word.word = newVal; word.edited = newVal !== word.originalWord;
     span.textContent = (hadSpace ? ' ' : '') + newVal;
     span.className   = 'word' + (word.edited ? ' edited' : '');
@@ -427,8 +445,57 @@ function applyEdit(segIdx, wordIdx, val) {
   if (span) { const hs = span.textContent.startsWith(' '); span.textContent = (hs ? ' ' : '') + val; span.className = 'word' + (word.edited ? ' edited' : ''); }
   updateEditCount(); saveToDB();
 }
-function undo() { if (!undoStack.length) return; const op = undoStack.pop(); redoStack.push(op); applyEdit(op.segIdx, op.wordIdx, op.before); updateUndoButtons(); showUndoToast('Undone'); }
-function redo() { if (!redoStack.length) return; const op = redoStack.pop(); undoStack.push(op); applyEdit(op.segIdx, op.wordIdx, op.after); updateUndoButtons(); showUndoToast('Redone'); }
+
+// Restore a full segments+wordsData snapshot (used by speaker undo/redo)
+function applySegmentSnapshot(snapshot) {
+  segments  = [];
+  wordsData = [];
+  snapshot.forEach((seg, si) => {
+    const words = seg.words.map((w, wi) => ({ ...w, segIdx: si, wordIdx: wi }));
+    segments.push({ ...seg, words });
+    wordsData.push(...words);
+  });
+  renderTranscript();
+  updateSpeakerStat();
+  saveToDB();
+}
+
+function serializeSegments() {
+  return segments.map(seg => ({
+    speaker: seg.speaker,
+    speakerClass: seg.speakerClass,
+    start: seg.start,
+    words: seg.words.map(w => {
+      const out = { ...w };
+      if (!w.splitBefore)  delete out.splitBefore;
+      if (!w.mergeBefore)  delete out.mergeBefore;
+      return out;
+    })
+  }));
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  const op = undoStack.pop();
+  redoStack.push(op);
+  if (op.type === 'word') {
+    applyEdit(op.segIdx, op.wordIdx, op.before);
+  } else if (op.type === 'speaker') {
+    applySegmentSnapshot(op.before);
+  }
+  updateUndoButtons(); showUndoToast('Undone');
+}
+function redo() {
+  if (!redoStack.length) return;
+  const op = redoStack.pop();
+  undoStack.push(op);
+  if (op.type === 'word') {
+    applyEdit(op.segIdx, op.wordIdx, op.after);
+  } else if (op.type === 'speaker') {
+    applySegmentSnapshot(op.after);
+  }
+  updateUndoButtons(); showUndoToast('Redone');
+}
 function updateUndoButtons() { document.getElementById('undo-btn').disabled = !undoStack.length; document.getElementById('redo-btn').disabled = !redoStack.length; }
 let _undoToastTimer;
 function showUndoToast(msg) { const el = document.getElementById('undo-toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(_undoToastTimer); _undoToastTimer = setTimeout(() => el.classList.remove('show'), 1500); }
@@ -462,7 +529,7 @@ function replaceOne() {
   const span = findMatches[findIndex], si = parseInt(span.dataset.segIdx), wi = parseInt(span.dataset.wordIdx);
   const word = segments[si].words[wi], replaceVal = document.getElementById('replace-input').value, before = word.word;
   word.word = replaceVal; word.edited = replaceVal !== word.originalWord;
-  undoStack.push({ segIdx: si, wordIdx: wi, before, after: replaceVal }); redoStack = []; updateUndoButtons();
+  undoStack.push({ type: 'word', segIdx: si, wordIdx: wi, before, after: replaceVal }); redoStack = []; updateUndoButtons();
   const hs = span.textContent.startsWith(' '); span.textContent = (hs ? ' ' : '') + replaceVal; span.className = 'word' + (word.edited ? ' edited' : '');
   updateEditCount(); saveToDB();
   findMatches.splice(findIndex, 1); span.classList.remove('found','found-current');
@@ -475,7 +542,7 @@ function replaceAll() {
   [...findMatches].forEach(span => {
     const si = parseInt(span.dataset.segIdx), wi = parseInt(span.dataset.wordIdx), word = segments[si].words[wi], before = word.word;
     word.word = replaceVal; word.edited = replaceVal !== word.originalWord;
-    undoStack.push({ segIdx: si, wordIdx: wi, before, after: replaceVal });
+    undoStack.push({ type: 'word', segIdx: si, wordIdx: wi, before, after: replaceVal });
     const hs = span.textContent.startsWith(' '); span.textContent = (hs ? ' ' : '') + replaceVal; span.className = 'word' + (word.edited ? ' edited' : '');
   });
   redoStack = []; updateUndoButtons(); updateEditCount(); saveToDB();
@@ -807,22 +874,36 @@ function hideNoAudioBar() {
 
 function handleReattachAudio(file) {
   if (!file) return;
+
+  function attachFile(f) {
+    document.getElementById('no-audio-wrong').style.display = 'none';
+    audio.src = URL.createObjectURL(f);
+    audio.load();
+    f.arrayBuffer()
+      .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
+      .then(decoded => drawWaveform(decoded))
+      .catch(() => {});
+    hideNoAudioBar();
+    showUndoToast('Audio attached');
+  }
+
   if (file.name !== _expectedAudioFilename) {
     const wrong = document.getElementById('no-audio-wrong');
-    wrong.textContent = `✗ Expected "${_expectedAudioFilename}", got "${file.name}"`;
     wrong.style.display = 'inline';
+    // Build warning with override option (replace any previous warning content)
+    wrong.innerHTML = '';
+    const msg = document.createTextNode(`⚠ Expected "${_expectedAudioFilename}", got "${file.name}" — `);
+    const overrideBtn = document.createElement('button');
+    overrideBtn.textContent = 'Attach anyway';
+    overrideBtn.style.cssText = 'background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;padding:0;text-decoration:underline;';
+    overrideBtn.onclick = () => attachFile(file);
+    wrong.appendChild(msg);
+    wrong.appendChild(overrideBtn);
     document.getElementById('audio-reattach-input').value = '';
     return;
   }
-  document.getElementById('no-audio-wrong').style.display = 'none';
-  audio.src = URL.createObjectURL(file);
-  audio.load();
-  file.arrayBuffer()
-    .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
-    .then(decoded => drawWaveform(decoded))
-    .catch(() => {});
-  hideNoAudioBar();
-  showUndoToast('Audio attached');
+
+  attachFile(file);
 }
 
 // ── Text selection → assign speaker ─────────────────────────────
@@ -867,6 +948,7 @@ document.getElementById('transcript-body').addEventListener('mouseup', e => {
   selectedSpans.forEach(span => span.classList.add('sel-highlight'));
   sel.removeAllRanges();
   showSelMenu(e.clientX, e.clientY, firstGlobalIdx, lastGlobalIdx, selectedSpans.length);
+  closeMergePopover();
 });
 
 document.addEventListener('mousedown', e => {
@@ -919,6 +1001,27 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
   };
   menu.appendChild(newItem);
 
+  // ── Split into own paragraph ──────────────────────────────────
+  // Only show if the selection is a strict subset of a paragraph
+  // (i.e. it doesn't already span the whole thing or cross para boundaries)
+  const selParaIds = new Set(
+    wordsData.slice(firstIdx, lastIdx + 1).map(w => {
+      // find which rendered para this word belongs to — use splitBefore/mergeBefore aware scan
+      return w.segIdx;
+    })
+  );
+  // Simpler check: selection must be > 1 word and not be the entire wordsData
+  if (wordCount >= 1 && lastIdx - firstIdx < wordsData.length - 1) {
+    const splitDiv = document.createElement('div'); splitDiv.className = 'sel-menu-divider'; menu.appendChild(splitDiv);
+    const splitItem = document.createElement('div'); splitItem.className = 'sel-menu-item';
+    splitItem.innerHTML = `
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;color:var(--accent)"><path d="M8 2v12M3 9l5 5 5-5"/></svg>
+      <span>Split into own paragraph</span>
+    `;
+    splitItem.onclick = () => { doSplitSelection(firstIdx, lastIdx); closeSelMenu(); };
+    menu.appendChild(splitItem);
+  }
+
   document.body.appendChild(menu);
   selMenu = menu;
 
@@ -931,6 +1034,7 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
 }
 
 function assignSelectionToSpeaker(firstGlobalIdx, lastGlobalIdx, targetClass) {
+  const before = serializeSegments();
   const selectedWords  = wordsData.slice(firstGlobalIdx, lastGlobalIdx + 1);
   const touchedSegIdxs = [...new Set(selectedWords.map(w => w.segIdx))];
 
@@ -965,6 +1069,7 @@ function assignSelectionToSpeaker(firstGlobalIdx, lastGlobalIdx, targetClass) {
     rebuildWordsDataRefs();
   });
 
+  undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
   renderTranscript();
   updateSpeakerStat();
   saveToDB();
@@ -979,6 +1084,141 @@ function rebuildWordsDataRefs() {
       wordsData.push(w);
     });
   });
+}
+
+// ── Merge popover (single-click on word in non-first paragraph) ──
+let mergePopover = null;
+// Stores the context so the confirm button can act on it
+let _mergePendingCtx = null;
+
+function closeMergePopover() {
+  if (mergePopover) { mergePopover.remove(); mergePopover = null; }
+  _mergePendingCtx = null;
+}
+
+function showMergePopover(ev, clickedGlobalIdx, paraFirstWordIdx, paraLastWordIdx, paraIdx) {
+  closeMergePopover();
+  ev.stopPropagation();
+
+  // How many words from the start of this paragraph up to (and including) the clicked word
+  const wordsToMerge = clickedGlobalIdx - paraFirstWordIdx + 1;
+  const totalInPara  = paraLastWordIdx - paraFirstWordIdx + 1;
+  const isAll        = wordsToMerge === totalInPara;
+
+  _mergePendingCtx = { clickedGlobalIdx, paraFirstWordIdx, paraLastWordIdx, wordsToMerge, isAll };
+
+  const pop = document.createElement('div');
+  pop.className = 'merge-popover';
+  pop.onclick = e => e.stopPropagation();
+
+  const label = isAll
+    ? `Merge all ${wordsToMerge} word${wordsToMerge > 1 ? 's' : ''} into previous paragraph`
+    : `Merge first ${wordsToMerge} word${wordsToMerge > 1 ? 's' : ''} into previous paragraph`;
+
+  pop.innerHTML = `
+    <div class="merge-pop-label">
+      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;color:var(--green)"><path d="M8 12V4M4 7l4-4 4 4"/></svg>
+      <span>${label}</span>
+    </div>
+    <div class="merge-pop-preview"></div>
+  `;
+
+  // Preview: show the words that will move up
+  const preview = pop.querySelector('.merge-pop-preview');
+  const movers = wordsData.slice(paraFirstWordIdx, clickedGlobalIdx + 1).map(w => w.word).join(' ');
+  preview.textContent = `"${movers.length > 60 ? movers.slice(0, 57) + '…' : movers}"`;
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.className = 'merge-pop-confirm';
+  confirmBtn.innerHTML = `<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l4 4 8-8"/></svg> Merge ↑`;
+  confirmBtn.onclick = () => {
+    doMergeUp(_mergePendingCtx);
+    closeMergePopover();
+  };
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'merge-pop-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = closeMergePopover;
+
+  const actions = document.createElement('div');
+  actions.className = 'merge-pop-actions';
+  actions.appendChild(confirmBtn);
+  actions.appendChild(cancelBtn);
+  pop.appendChild(actions);
+
+  document.body.appendChild(pop);
+  mergePopover = pop;
+
+  // Position near the clicked word
+  const mw = pop.offsetWidth || 260, mh = pop.offsetHeight || 110;
+  let left = ev.clientX + 10, top = ev.clientY + 10;
+  if (left + mw > window.innerWidth  - 12) left = ev.clientX - mw - 8;
+  if (top  + mh > window.innerHeight - 12) top  = ev.clientY - mh - 8;
+  pop.style.left = left + 'px';
+  pop.style.top  = top  + 'px';
+}
+
+// Dismiss merge popover when clicking outside
+document.addEventListener('mousedown', e => {
+  if (mergePopover && !mergePopover.contains(e.target)) closeMergePopover();
+});
+
+// ── Split / Merge operations ─────────────────────────────────────
+
+// Merge words [paraFirstWordIdx .. clickedGlobalIdx] up into the previous paragraph.
+// If wordsToMerge === all words in the para, the whole paragraph dissolves.
+// Otherwise, the remaining words stay as a new paragraph.
+function doMergeUp({ clickedGlobalIdx, paraFirstWordIdx, paraLastWordIdx, isAll }) {
+  const before = serializeSegments();
+
+  if (isAll) {
+    // Simply clear any splitBefore on the first word of this para → auto-breaks will absorb it
+    const w = wordsData[paraFirstWordIdx];
+    w.mergeBefore = true;
+    delete w.splitBefore;
+  } else {
+    // Words [paraFirstWordIdx .. clickedGlobalIdx] get mergeBefore on the first word of this para
+    // and splitBefore on the word after the clicked one so the tail stays separate
+    const firstW = wordsData[paraFirstWordIdx];
+    firstW.mergeBefore = true;
+    delete firstW.splitBefore;
+
+    const tailW = wordsData[clickedGlobalIdx + 1];
+    if (tailW) {
+      tailW.splitBefore = true;
+      delete tailW.mergeBefore;
+    }
+  }
+
+  undoStack.push({ type: 'speaker', before, after: serializeSegments() });
+  redoStack = []; updateUndoButtons();
+  renderTranscript();
+  saveToDB();
+}
+
+// Split selection into its own paragraph with the same speaker.
+// Called from the selection popover "Split into own paragraph" item.
+function doSplitSelection(firstGlobalIdx, lastGlobalIdx) {
+  const before = serializeSegments();
+
+  // Mark the first selected word as a split point (new para starts here)
+  wordsData[firstGlobalIdx].splitBefore = true;
+  delete wordsData[firstGlobalIdx].mergeBefore;
+
+  // If the selection doesn't extend to the end of the transcript,
+  // mark the word after the selection as another split point so what follows stays separate
+  if (lastGlobalIdx + 1 < wordsData.length) {
+    const nextW = wordsData[lastGlobalIdx + 1];
+    // Only force a new para here if one wouldn't already start naturally
+    nextW.splitBefore = true;
+    delete nextW.mergeBefore;
+  }
+
+  undoStack.push({ type: 'speaker', before, after: serializeSegments() });
+  redoStack = []; updateUndoButtons();
+  renderTranscript();
+  saveToDB();
 }
 
 // ── Keyboard shortcuts ───────────────────────────────────────────
