@@ -3,4 +3,4 @@ Vibed together quickly as was just a quick tool replace Otter.ai's three uploade
 
 Uses Mistral Voxtral so ty to them
 
-![Go To Page](https://dominickstephens.github.io/VoxBox/app.html)
+[Go To Page](https://dominickstephens.github.io/VoxBox/app.html)
