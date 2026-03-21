@@ -221,6 +221,7 @@ function showSpeakerPopover(e, speakerClass, paraFirstWordIdx, paraLastWordIdx) 
 function reassignSpeaker(fromClass, toClass) {
   segments.forEach(seg => { if (seg.speakerClass === fromClass) { seg.speakerClass = toClass; seg.speaker = String(toClass); } });
   renderTranscript();
+  updateSpeakerStat();
 }
 
 function createAndAssignSpeaker(paraFirstWordIdx, paraLastWordIdx, newClass) {
@@ -236,6 +237,7 @@ function createAndAssignSpeaker(paraFirstWordIdx, paraLastWordIdx, newClass) {
 
   speakerNames[newClass] = `SPEAKER ${newClass + 1}`;
   renderTranscript();
+  updateSpeakerStat(); //
   saveToLocalStorage();
 }
 
@@ -922,6 +924,7 @@ function assignSelectionToSpeaker(firstGlobalIdx, lastGlobalIdx, targetClass) {
   });
 
   renderTranscript();
+  updateSpeakerStat();
   saveToLocalStorage();
 }
 
@@ -969,5 +972,12 @@ function formatTime(s) { if (s == null || isNaN(s)) return '—'; return `${Math
 function escHtml(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function showError(msg) { const el = document.getElementById('error-toast'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => { el.style.display = 'none'; }, 6000); }
 function toggleApiKeyVisibility() { const i = document.getElementById('api-key-input'); i.type = i.type === 'password' ? 'text' : 'password'; }
+
+function updateSpeakerStat() {
+  const uniqueSpeakers = new Set(segments.map(s => s.speakerClass)).size;
+  document.getElementById('stat-speakers').textContent = uniqueSpeakers;
+  document.getElementById('stat-segments').textContent = segments.length;
+  document.getElementById('stat-words').textContent    = wordsData.length.toLocaleString();
+}
 
 showScreen('upload');
