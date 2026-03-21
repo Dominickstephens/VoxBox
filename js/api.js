@@ -64,6 +64,9 @@ async function startTranscription(file, apiKey) {
     .then(drawWaveform)
     .catch(() => {});
 
+  // Persist audio blob so it auto-loads when reopened from history
+  dbSaveAudio(file.name, file);
+
   try {
     const wordData = await apiCall(file, apiKey, { timestamp_granularities: 'word' });
     document.getElementById('processing-label').textContent = 'Identifying speakers… (2/2)';
@@ -121,6 +124,7 @@ function loadDemoData(file) {
       .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
       .then(drawWaveform)
       .catch(() => {});
+    dbSaveAudio(file.name, file);
   }
 
   document.getElementById('stat-words').textContent    = wordsData.length;

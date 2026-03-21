@@ -1,8 +1,9 @@
 // ── IndexedDB ────────────────────────────────────────────────────
 const DB_NAME    = 'voxbox';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_SESSIONS = 'sessions';   // transcript history
 const STORE_PREFS    = 'prefs';      // api key + lightweight prefs
+const STORE_AUDIO    = 'audio';      // raw audio blobs keyed by filename
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -15,10 +16,30 @@ function openDB() {
       if (!db.objectStoreNames.contains(STORE_PREFS)) {
         db.createObjectStore(STORE_PREFS);
       }
+      if (!db.objectStoreNames.contains(STORE_AUDIO)) {
+        db.createObjectStore(STORE_AUDIO);
+      }
     };
     req.onsuccess = e => resolve(e.target.result);
     req.onerror   = e => reject(e.target.error);
   });
+}
+
+// ── Audio blob helpers ────────────────────────────────────────────
+async function dbSaveAudio(filename, blob) {
+  try { await dbPut(STORE_AUDIO, blob, filename); } catch (e) { console.warn('Audio save failed:', e); }
+}
+
+async function dbLoadAudio(filename) {
+  try { return await dbGet(STORE_AUDIO, filename); } catch (_) { return null; }
+}
+
+async function dbDeleteAudio(filename) {
+  try { await dbDelete(STORE_AUDIO, filename); } catch (_) {}
+}
+
+async function dbClearAudio() {
+  try { await dbClearStore(STORE_AUDIO); } catch (_) {}
 }
 
 async function dbGet(store, key) {

@@ -104,11 +104,17 @@ async function updateHistoryEdits(filename, edits, names) {
 }
 
 async function deleteHistoryEntry(id) {
-  try { await dbDelete(STORE_SESSIONS, id); renderHistory(); } catch (_) {}
+  try {
+    const hist  = await getHistory();
+    const entry = hist.find(h => h.id === id);
+    if (entry) await dbDeleteAudio(entry.filename);
+    await dbDelete(STORE_SESSIONS, id);
+    renderHistory();
+  } catch (_) {}
 }
 
 async function clearAllHistory() {
-  try { await dbClearStore(STORE_SESSIONS); renderHistory(); } catch (_) {}
+  try { await dbClearStore(STORE_SESSIONS); await dbClearAudio(); renderHistory(); } catch (_) {}
 }
 
 // ── Load from history ─────────────────────────────────────────────
@@ -140,7 +146,23 @@ function loadFromHistory(entry) {
   document.getElementById('current-time').textContent     = '0:00';
   document.getElementById('progress-fill').style.width    = '0%';
   document.getElementById('progress-thumb').style.left    = '0%';
-  showNoAudioBar(entry.filename);
+
+  // Try to restore audio from IndexedDB before falling back to the attach banner
+  dbLoadAudio(entry.filename).then(blob => {
+    if (blob) {
+      audio.src = URL.createObjectURL(blob);
+      audio.load();
+      blob.arrayBuffer()
+        .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
+        .then(decoded => {
+          document.getElementById('waveform-wrap').style.display = 'block';
+          drawWaveform(decoded);
+        })
+        .catch(() => {});
+    } else {
+      showNoAudioBar(entry.filename);
+    }
+  }).catch(() => showNoAudioBar(entry.filename));
 
   undoStack = []; redoStack = []; updateUndoButtons();
   renderTranscript(); updateEditCount();
