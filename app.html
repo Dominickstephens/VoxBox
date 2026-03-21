@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VoxEdit — Transcription Studio</title>
+<title>VoxBox — Transcription Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -62,7 +62,7 @@ html, body { height: 100%; background: var(--bg-0); color: var(--text-0); font-f
 .api-key-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-2); padding: 2px; display: flex; align-items: center; }
 
 /* Editor area */
-.editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-0); }
+.editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-0); padding-bottom: 28px; }
 
 /* Upload */
 /* #upload-screen layout defined below in recent-section block */
@@ -273,7 +273,7 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
 <div id="app">
 
   <div class="topbar">
-    <a class="topbar-logo" href="#"><div class="logo-mark">V</div>VoxEdit</a>
+    <a class="topbar-logo" href="#"><div class="logo-mark">V</div>VoxBox</a>
     <div class="topbar-sep"></div>
     <div class="topbar-title" id="topbar-filename">Drop an audio file to begin</div>
     <div class="topbar-actions">
@@ -464,8 +464,8 @@ let undoStack    = [];
 let redoStack    = [];
 let findMatches  = [];
 let findIndex    = 0;
-const LS_KEY      = 'voxedit_autosave';
-const LS_HIST_KEY = 'voxedit_history';
+const LS_KEY      = 'voxbox_autosave';
+const LS_HIST_KEY = 'voxbox_history';
 const MAX_HISTORY = 12;
 const audio      = document.getElementById('audio-player');
 
@@ -1427,5 +1427,8 @@ function toggleApiKeyVisibility() { const i = document.getElementById('api-key-i
 
 showScreen('upload');
 </script>
+<div style="position:fixed;bottom:0;left:240px;right:0;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-2);border-top:1px solid var(--border);background:var(--bg-1);z-index:5;">
+  made with <span style="color:var(--accent);margin:0 4px;">&lt;3</span> by dominick
+</div>
 </body>
 </html>
