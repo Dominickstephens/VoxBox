@@ -222,6 +222,7 @@ function reassignSpeaker(fromClass, toClass) {
   segments.forEach(seg => { if (seg.speakerClass === fromClass) { seg.speakerClass = toClass; seg.speaker = String(toClass); } });
   renderTranscript();
   updateSpeakerStat();
+  saveToLocalStorage();
 }
 
 function createAndAssignSpeaker(paraFirstWordIdx, paraLastWordIdx, newClass) {
@@ -485,11 +486,14 @@ function updateHistoryEdits(filename, edits, names) {
     if (!entry) return;
     entry.edits = edits;
     entry.speakerNames = { ...names };
-    // Also update words in stored segments to reflect edits
-    edits.forEach(e => {
-      const seg = entry.segments[e.segIdx];
-      if (seg && seg.words[e.wordIdx]) { seg.words[e.wordIdx].word = e.word; seg.words[e.wordIdx].edited = true; }
-    });
+    entry.speakerCount = new Set(segments.map(s => s.speakerClass)).size; // ← add
+    // Update segments snapshot so speaker reassignments survive reload
+    entry.segments = segments.map(seg => ({                               // ← add
+      speaker: seg.speaker,
+      speakerClass: seg.speakerClass,
+      start: seg.start,
+      words: seg.words.map(w => ({ word: w.word, originalWord: w.originalWord, start: w.start, end: w.end, edited: w.edited }))
+    }));
     localStorage.setItem(LS_HIST_KEY, JSON.stringify(hist));
   } catch(_) {}
 }
