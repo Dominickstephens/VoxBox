@@ -9,28 +9,39 @@
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23f97316'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-size='70' font-family='monospace' font-weight='700' fill='white'>V</text></svg>"/>
-<script src="app.js" defer></script>
+<script src="js/db.js"            defer></script>
+<script src="js/state.js"         defer></script>
+<script src="js/utils.js"         defer></script>
+<script src="js/ui.js"            defer></script>
+<script src="js/audio.js"         defer></script>
+<script src="js/transcription.js" defer></script>
+<script src="js/speakers.js"      defer></script>
+<script src="js/history.js"       defer></script>
+<script src="js/export.js"        defer></script>
+<script src="js/api.js"           defer></script>
+<script src="js/keyboard.js"      defer></script>
+<script src="js/init.js"          defer></script>
 </head>
 <body>
 <div id="app">
 
   <div class="topbar">
-    <a class="topbar-logo" href="#" onclick="event.preventDefault(); goBack()"><div class="logo-mark">V</div>VoxBox</a>
+    <a class="topbar-logo" href="#" id="logo-link"><div class="logo-mark">V</div>VoxBox</a>
     <div class="topbar-sep"></div>
     <div class="topbar-title" id="topbar-filename">Drop an audio file to begin</div>
     <div class="topbar-actions">
-      <button class="btn btn-ghost" id="back-btn" onclick="goBack()" style="display:none;font-size:12px;">
+      <button class="btn btn-ghost" id="back-btn" style="display:none;font-size:12px;">
         <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg>
         New
       </button>
       <div class="export-wrap" id="export-wrap">
-        <button class="btn btn-ghost" onclick="toggleExportMenu()" id="export-btn" style="display:none;font-size:12px;">
+        <button class="btn btn-ghost" id="export-btn" style="display:none;font-size:12px;">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 10V2M5 7l3 3 3-3M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1"/></svg>Export
         </button>
         <div class="export-menu" id="export-menu">
-          <div class="export-item" onclick="exportTxt()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4"/></svg>Plain text (.txt)</div>
-          <div class="export-item" onclick="exportSrt()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>Subtitles (.srt)</div>
-          <div class="export-item" onclick="exportJson()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2c-1 0-2 .9-2 2v8c0 1.1.9 2 2 2M12 2c1 0 2 .9 2 2v8c0 1.1-.9 2-2 2"/><path d="M6 10c.5.7 1.5.7 2 0s1.5.7 2 0"/></svg>JSON with timestamps</div>
+          <div class="export-item" id="export-txt"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4"/></svg>Plain text (.txt)</div>
+          <div class="export-item" id="export-srt"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>Subtitles (.srt)</div>
+          <div class="export-item" id="export-json"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2c-1 0-2 .9-2 2v8c0 1.1.9 2 2 2M12 2c1 0 2 .9 2 2v8c0 1.1-.9 2-2 2"/><path d="M6 10c.5.7 1.5.7 2 0s1.5.7 2 0"/></svg>JSON with timestamps</div>
         </div>
       </div>
     </div>
@@ -61,7 +72,7 @@
         <div class="api-key-label">Mistral API key</div>
         <div class="api-key-input-wrap">
           <input type="password" class="api-key-input" id="api-key-input" placeholder="sk-…" autocomplete="off"/>
-          <button class="api-key-toggle" onclick="toggleApiKeyVisibility()">
+          <button class="api-key-toggle" id="api-key-toggle">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></svg>
           </button>
         </div>
@@ -75,19 +86,19 @@
           <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 18V6M8 10l4-4 4 4"/><path d="M3 18v1a2 2 0 002 2h14a2 2 0 002-2v-1"/></svg></div>
           <h2>Transcribe Audio</h2>
           <p>Upload any audio file and Voxtral will transcribe it with<br/>word-level timestamps for synchronized editing.</p>
-          <div class="upload-drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <div class="upload-drop-zone" id="drop-zone">
             <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.2" style="color:var(--text-2)"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
             <span>Drag &amp; drop your audio file here<br/>or <strong>click to browse</strong></span>
             <div class="upload-formats">MP3 · WAV · M4A · FLAC · OGG · up to 3 hours</div>
           </div>
-          <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov" style="display:none" onchange="handleFileSelect(this.files[0])"/>
+          <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov" style="display:none"/>
         </div>
 
         <!-- RECENT TRANSCRIPTIONS -->
         <div class="recent-section" id="recent-section" style="display:none">
           <div class="recent-header">
             <span class="recent-label">Recent</span>
-            <button class="recent-clear" onclick="clearAllHistory()">Clear all</button>
+            <button class="recent-clear" id="clear-history-btn">Clear all</button>
           </div>
           <div class="recent-list" id="recent-list"></div>
         </div>
@@ -100,7 +111,7 @@
       </div>
 
       <div id="transcript-screen">
-        <div class="waveform-wrap" id="waveform-wrap" onclick="waveformSeek(event)">
+        <div class="waveform-wrap" id="waveform-wrap">
           <canvas id="waveform-canvas"></canvas>
           <div class="waveform-playhead" id="waveform-playhead" style="left:0%"></div>
         </div>
@@ -114,8 +125,8 @@
           <span>Attach audio to enable playback —</span>
           <span class="no-audio-name" id="no-audio-expected"></span>
           <span id="no-audio-wrong" class="no-audio-wrong" style="display:none"></span>
-          <input type="file" id="audio-reattach-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov" style="display:none" onchange="handleReattachAudio(this.files[0])"/>
-          <button class="no-audio-attach" onclick="document.getElementById('audio-reattach-input').click()">
+          <input type="file" id="audio-reattach-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov" style="display:none"/>
+          <button class="no-audio-attach" id="no-audio-attach-btn">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M8 2v10M4 8l4 4 4-4"/>
             </svg>
@@ -124,15 +135,15 @@
         </div>
 
         <div class="player-bar">
-          <button class="play-btn" onclick="togglePlay()">
+          <button class="play-btn" id="play-btn">
             <svg id="play-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2l10 6-10 6V2z"/></svg>
           </button>
           <div class="time-display"><span id="current-time">0:00</span> / <span id="total-time">0:00</span></div>
-          <div class="progress-track" onclick="seekAudio(event)">
+          <div class="progress-track" id="progress-track">
             <div class="progress-fill" id="progress-fill" style="width:0%"></div>
             <div class="progress-thumb" id="progress-thumb" style="left:0%"></div>
           </div>
-          <select class="speed-select" onchange="changeSpeed(this.value)">
+          <select class="speed-select" id="speed-select">
             <option value="0.5">0.5×</option><option value="0.75">0.75×</option>
             <option value="1" selected>1×</option><option value="1.25">1.25×</option>
             <option value="1.5">1.5×</option><option value="2">2×</option>
@@ -141,37 +152,37 @@
 
         <div class="find-bar" id="find-bar">
           <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-2);flex-shrink:0"><circle cx="6.5" cy="6.5" r="4"/><path d="M11 11l3 3"/></svg>
-          <input id="find-input" placeholder="Find…" oninput="onFindInput()" onkeydown="onFindKey(event)"/>
+          <input id="find-input" placeholder="Find…"/>
           <span class="find-bar-sep">→</span>
-          <input id="replace-input" placeholder="Replace with…" onkeydown="onReplaceKey(event)"/>
+          <input id="replace-input" placeholder="Replace with…"/>
           <span class="find-count" id="find-count"></span>
           <div class="find-nav">
-            <button onclick="findNav(-1)">‹</button>
-            <button onclick="findNav(1)">›</button>
+            <button id="find-prev">‹</button>
+            <button id="find-next">›</button>
           </div>
-          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;" onclick="replaceOne()">Replace</button>
-          <button class="btn btn-ghost" style="font-size:11px;padding:4px 9px;" onclick="replaceAll()">All</button>
-          <button class="find-bar-close" onclick="closeFindBar()">×</button>
+          <button class="btn btn-ghost" id="replace-one-btn" style="font-size:11px;padding:4px 9px;">Replace</button>
+          <button class="btn btn-ghost" id="replace-all-btn" style="font-size:11px;padding:4px 9px;">All</button>
+          <button class="find-bar-close" id="find-close-btn">×</button>
         </div>
 
         <div class="transcript-toolbar">
           <span class="toolbar-label">Transcript</span>
-          <button class="btn btn-ghost" id="autoscroll-btn" onclick="toggleAutoScroll()" style="font-size:11px;padding:4px 10px;">
+          <button class="btn btn-ghost" id="autoscroll-btn" style="font-size:11px;padding:4px 10px;">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M4 10l4 4 4-4"/></svg>Auto-scroll
           </button>
           <div class="toolbar-spacer"></div>
           <div class="edit-count" id="edit-count">0 edits</div>
-          <button class="btn btn-ghost" id="undo-btn" onclick="undo()" style="font-size:11px;padding:4px 10px;" disabled title="Undo (Ctrl+Z)">
+          <button class="btn btn-ghost" id="undo-btn" style="font-size:11px;padding:4px 10px;" disabled title="Undo (Ctrl+Z)">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7H10a3 3 0 010 6H8M3 7l3-3M3 7l3 3"/></svg>
           </button>
-          <button class="btn btn-ghost" id="redo-btn" onclick="redo()" style="font-size:11px;padding:4px 10px;" disabled title="Redo (Ctrl+Y)">
+          <button class="btn btn-ghost" id="redo-btn" style="font-size:11px;padding:4px 10px;" disabled title="Redo (Ctrl+Y)">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 7H6a3 3 0 000 6H8M13 7l-3-3M13 7l-3 3"/></svg>
           </button>
-          <button class="btn btn-ghost" onclick="openFindBar()" style="font-size:11px;padding:4px 10px;" title="Find &amp; Replace (Ctrl+F)">
+          <button class="btn btn-ghost" id="find-open-btn" style="font-size:11px;padding:4px 10px;" title="Find &amp; Replace (Ctrl+F)">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4"/><path d="M11 11l3 3"/></svg>Find
           </button>
-          <button class="btn btn-ghost" onclick="resetEdits()" style="font-size:11px;padding:4px 10px;">Reset</button>
-          <button class="btn btn-ghost" id="copy-btn" onclick="copyTranscript()" style="font-size:11px;padding:4px 10px;">
+          <button class="btn btn-ghost" id="reset-edits-btn" style="font-size:11px;padding:4px 10px;">Reset</button>
+          <button class="btn btn-ghost" id="copy-btn" style="font-size:11px;padding:4px 10px;">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5"/></svg>Copy
           </button>
         </div>
