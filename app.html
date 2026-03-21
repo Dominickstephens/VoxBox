@@ -338,7 +338,7 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
             <span>Drag &amp; drop your audio file here<br/>or <strong>click to browse</strong></span>
             <div class="upload-formats">MP3 · WAV · M4A · FLAC · OGG · up to 3 hours</div>
           </div>
-          <input type="file" id="file-input" accept="audio/*" style="display:none" onchange="handleFileSelect(this.files[0])"/>
+          <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov" style="display:none" onchange="handleFileSelect(this.files[0])"/>
         </div>
 
         <!-- RECENT TRANSCRIPTIONS -->
@@ -372,8 +372,7 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
           <span>Attach audio to enable playback —</span>
           <span class="no-audio-name" id="no-audio-expected"></span>
           <span id="no-audio-wrong" class="no-audio-wrong" style="display:none"></span>
-          <input type="file" id="audio-reattach-input" accept="audio/*" style="display:none"
-            onchange="handleReattachAudio(this.files[0])"/>
+          <input type="file" id="audio-reattach-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov" style="display:none" onchange="handleReattachAudio(this.files[0])"/>
           <button class="no-audio-attach" onclick="document.getElementById('audio-reattach-input').click()">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M8 2v10M4 8l4 4 4-4"/>
@@ -476,7 +475,7 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-ove
 dropZone.addEventListener('drop', e => {
   e.preventDefault(); dropZone.classList.remove('drag-over');
   const f = e.dataTransfer.files[0];
-  if (f && f.type.startsWith('audio/')) handleFileSelect(f);
+  if (f && (f.type.startsWith('audio/') || f.type.startsWith('video/') || f.name.match(/\.(mp3|wav|m4a|aac|flac|ogg|mp4|mov)$/i))) handleFileSelect(f);
   else showError('Please drop an audio file (MP3, WAV, M4A, etc.)');
 });
 
