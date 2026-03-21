@@ -67,13 +67,20 @@ async function startTranscription(file, apiKey) {
   // Persist audio blob so it auto-loads when reopened from history
   dbSaveAudio(file.name, file);
 
+  // Load saved vocabulary for context biasing
+  const contextBias = await vocabGetBiasString();
+
   try {
-    const wordData = await apiCall(file, apiKey, { timestamp_granularities: 'word' });
+    const wordParams = { timestamp_granularities: 'word' };
+    if (contextBias) wordParams.context_bias = contextBias;
+    const wordData = await apiCall(file, apiKey, wordParams);
     document.getElementById('processing-label').textContent = 'Identifying speakers… (2/2)';
 
     let diarData = null;
     try {
-      diarData = await apiCall(file, apiKey, { timestamp_granularities: 'segment', diarize: 'true' });
+      const diarParams = { timestamp_granularities: 'segment', diarize: 'true' };
+      if (contextBias) diarParams.context_bias = contextBias;
+      diarData = await apiCall(file, apiKey, diarParams);
     } catch (e) {
       console.warn('Diarization failed:', e.message);
     }
@@ -124,7 +131,6 @@ function loadDemoData(file) {
       .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
       .then(drawWaveform)
       .catch(() => {});
-    dbSaveAudio(file.name, file);
   }
 
   document.getElementById('stat-words').textContent    = wordsData.length;

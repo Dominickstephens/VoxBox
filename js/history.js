@@ -75,6 +75,8 @@ async function saveToHistory(filename, language, speakerCount) {
       })),
     };
     await dbPut(STORE_SESSIONS, entry);
+    // Harvest any already-edited words into the context-bias vocab
+    _harvestEditsToVocab();
   } catch (e) {
     console.warn('History save failed:', e.message);
   }
@@ -98,23 +100,28 @@ async function updateHistoryEdits(filename, edits, names) {
       })),
     }));
     await dbPut(STORE_SESSIONS, entry);
+    _harvestEditsToVocab();
   } catch (e) {
     console.warn('updateHistoryEdits failed:', e);
   }
 }
 
+// ── Vocab harvesting ──────────────────────────────────────────────
+// Collects all currently-edited words (the corrected versions) and
+// pushes them into the persistent context-bias vocabulary store.
+function _harvestEditsToVocab() {
+  const editedWords = wordsData
+    .filter(w => w.edited && w.word && w.word !== w.originalWord)
+    .map(w => w.word);
+  if (editedWords.length) vocabAddTerms(editedWords);
+}
+
 async function deleteHistoryEntry(id) {
-  try {
-    const hist  = await getHistory();
-    const entry = hist.find(h => h.id === id);
-    if (entry) await dbDeleteAudio(entry.filename);
-    await dbDelete(STORE_SESSIONS, id);
-    renderHistory();
-  } catch (_) {}
+  try { await dbDelete(STORE_SESSIONS, id); renderHistory(); } catch (_) {}
 }
 
 async function clearAllHistory() {
-  try { await dbClearStore(STORE_SESSIONS); await dbClearAudio(); renderHistory(); } catch (_) {}
+  try { await dbClearStore(STORE_SESSIONS); renderHistory(); } catch (_) {}
 }
 
 // ── Load from history ─────────────────────────────────────────────
@@ -146,23 +153,7 @@ function loadFromHistory(entry) {
   document.getElementById('current-time').textContent     = '0:00';
   document.getElementById('progress-fill').style.width    = '0%';
   document.getElementById('progress-thumb').style.left    = '0%';
-
-  // Try to restore audio from IndexedDB before falling back to the attach banner
-  dbLoadAudio(entry.filename).then(blob => {
-    if (blob) {
-      audio.src = URL.createObjectURL(blob);
-      audio.load();
-      blob.arrayBuffer()
-        .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
-        .then(decoded => {
-          document.getElementById('waveform-wrap').style.display = 'block';
-          drawWaveform(decoded);
-        })
-        .catch(() => {});
-    } else {
-      showNoAudioBar(entry.filename);
-    }
-  }).catch(() => showNoAudioBar(entry.filename));
+  showNoAudioBar(entry.filename);
 
   undoStack = []; redoStack = []; updateUndoButtons();
   renderTranscript(); updateEditCount();
