@@ -1,7 +1,6 @@
 // ── Speakers ──────────────────────────────────────────────────────
 // Speaker popover (rename / reassign whole paragraph), text-selection
-// context menu (assign selection / split into paragraph), and merge-up
-// popover. Also handles the split/merge paragraph operations.
+// context menu (assign / merge / split / delete), and paragraph operations.
 
 // ── Speaker popover ───────────────────────────────────────────────
 let activeSpeakerPopover = null;
@@ -123,7 +122,6 @@ document.getElementById('transcript-body').addEventListener('mouseup', e => {
   selectedSpans.forEach(span => span.classList.add('sel-highlight'));
   sel.removeAllRanges();
   showSelMenu(e.clientX, e.clientY, firstGlobalIdx, lastGlobalIdx, selectedSpans.length);
-  closeMergePopover();
 });
 
 document.addEventListener('mousedown', e => {
@@ -166,6 +164,22 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
   newItem.appendChild(newDot); newItem.appendChild(newLbl);
   newItem.onclick = () => { speakerNames[nextClass] = `SPEAKER ${nextClass + 1}`; assignSelectionToSpeaker(firstIdx, lastIdx, nextClass); closeSelMenu(); };
   menu.appendChild(newItem);
+
+  // Merge into previous paragraph (only when selection doesn't start at the very first word)
+  if (firstIdx > 0) {
+    const mergeDiv = document.createElement('div'); mergeDiv.className = 'sel-menu-divider'; menu.appendChild(mergeDiv);
+    const mergeItem = document.createElement('div'); mergeItem.className = 'sel-menu-item';
+    const renderParaStart = _getRenderedParaStart(firstIdx);
+    const previewWords = wordsData.slice(renderParaStart, lastIdx + 1).map(w => w.word).join(' ');
+    const preview = previewWords.length > 45 ? previewWords.slice(0, 42) + '…' : previewWords;
+    mergeItem.innerHTML = `
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;color:var(--green)"><path d="M8 12V4M4 7l4-4 4 4"/></svg>
+      <span>Merge into previous paragraph</span>
+    `;
+    mergeItem.title = `"${preview}"`;
+    mergeItem.onclick = () => { doMergeSelection(firstIdx, lastIdx); closeSelMenu(); };
+    menu.appendChild(mergeItem);
+  }
 
   // Split into own paragraph (only when selection is a strict subset)
   if (wordCount >= 1 && lastIdx - firstIdx < wordsData.length - 1) {
@@ -238,78 +252,59 @@ function rebuildWordsDataRefs() {
   });
 }
 
-// ── Merge-up popover (single-click on word in non-first paragraph) ─
-let mergePopover    = null;
-let _mergePendingCtx = null;
-
-function closeMergePopover() {
-  if (mergePopover) { mergePopover.remove(); mergePopover = null; }
-  _mergePendingCtx = null;
-}
-
-function showMergePopover(ev, clickedGlobalIdx, paraFirstWordIdx, paraLastWordIdx, paraIdx) {
-  closeMergePopover();
-  ev.stopPropagation();
-
-  const wordsToMerge = clickedGlobalIdx - paraFirstWordIdx + 1;
-  const totalInPara  = paraLastWordIdx - paraFirstWordIdx + 1;
-  const isAll        = wordsToMerge === totalInPara;
-  _mergePendingCtx   = { clickedGlobalIdx, paraFirstWordIdx, paraLastWordIdx, wordsToMerge, isAll };
-
-  const pop = document.createElement('div'); pop.className = 'merge-popover';
-  pop.onclick = e => e.stopPropagation();
-
-  const label = isAll
-    ? `Merge all ${wordsToMerge} word${wordsToMerge > 1 ? 's' : ''} into previous paragraph`
-    : `Merge first ${wordsToMerge} word${wordsToMerge > 1 ? 's' : ''} into previous paragraph`;
-
-  pop.innerHTML = `
-    <div class="merge-pop-label">
-      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;color:var(--green)"><path d="M8 12V4M4 7l4-4 4 4"/></svg>
-      <span>${label}</span>
-    </div>
-    <div class="merge-pop-preview"></div>
-  `;
-
-  const preview = pop.querySelector('.merge-pop-preview');
-  const movers  = wordsData.slice(paraFirstWordIdx, clickedGlobalIdx + 1).map(w => w.word).join(' ');
-  preview.textContent = `"${movers.length > 60 ? movers.slice(0, 57) + '…' : movers}"`;
-
-  const confirmBtn = document.createElement('button'); confirmBtn.className = 'merge-pop-confirm';
-  confirmBtn.innerHTML = `<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8l4 4 8-8"/></svg> Merge ↑`;
-  confirmBtn.onclick   = () => { doMergeUp(_mergePendingCtx); closeMergePopover(); };
-
-  const cancelBtn = document.createElement('button'); cancelBtn.className = 'merge-pop-cancel';
-  cancelBtn.textContent = 'Cancel'; cancelBtn.onclick = closeMergePopover;
-
-  const actions = document.createElement('div'); actions.className = 'merge-pop-actions';
-  actions.appendChild(confirmBtn); actions.appendChild(cancelBtn); pop.appendChild(actions);
-
-  document.body.appendChild(pop); mergePopover = pop;
-
-  const mw = pop.offsetWidth || 260, mh = pop.offsetHeight || 110;
-  let left = ev.clientX + 10, top = ev.clientY + 10;
-  if (left + mw > window.innerWidth  - 12) left = ev.clientX - mw - 8;
-  if (top  + mh > window.innerHeight - 12) top  = ev.clientY - mh - 8;
-  pop.style.left = left + 'px'; pop.style.top = top + 'px';
-}
-
-document.addEventListener('mousedown', e => {
-  if (mergePopover && !mergePopover.contains(e.target)) closeMergePopover();
-});
-
 // ── Split / Merge operations ──────────────────────────────────────
-function doMergeUp({ clickedGlobalIdx, paraFirstWordIdx, paraLastWordIdx, isAll }) {
-  const before = serializeSegments();
-  if (isAll) {
-    const w = wordsData[paraFirstWordIdx]; w.mergeBefore = true; delete w.splitBefore;
-  } else {
-    const firstW = wordsData[paraFirstWordIdx]; firstW.mergeBefore = true; delete firstW.splitBefore;
-    const tailW  = wordsData[clickedGlobalIdx + 1];
-    if (tailW) { tailW.splitBefore = true; delete tailW.mergeBefore; }
+
+// Returns the global word index of the first word in the rendered paragraph
+// that contains globalIdx. Respects splitBefore/mergeBefore overrides exactly
+// as renderTranscript() does.
+function _getRenderedParaStart(globalIdx) {
+  const PAUSE = 1.5;
+  let paraStart = 0;
+  for (let i = 0; i <= globalIdx; i++) {
+    const w    = wordsData[i];
+    const prev = wordsData[i - 1];
+    const gap       = prev ? Math.max(0, w.start - prev.end) : 999;
+    const spkChange = prev && segments[w.segIdx].speaker !== segments[prev.segIdx].speaker;
+    const forceSplit = w.splitBefore === true;
+    const forceMerge = w.mergeBefore === true;
+    const autoBreak  = !prev || gap > PAUSE || spkChange;
+    const shouldBreak = forceSplit || (!forceMerge && (i === 0 || autoBreak));
+    if (shouldBreak) paraStart = i;
   }
+  return paraStart;
+}
+
+// Merge: takes everything from the rendered-paragraph start that contains
+// firstIdx, through lastIdx, and folds it up into the previous paragraph.
+// Any words after lastIdx that were in the same rendered paragraph stay put
+// (they get a splitBefore so they form their own paragraph).
+function doMergeSelection(firstIdx, lastIdx) {
+  const before      = serializeSegments();
+  const paraStart   = _getRenderedParaStart(firstIdx);
+
+  // Find the rendered paragraph start of the paragraph before paraStart
+  // so we know there IS a previous paragraph to merge into.
+  if (paraStart === 0) return; // nothing above to merge into
+
+  // Mark the paraStart word as mergeBefore (collapses it into previous para)
+  const startWord = wordsData[paraStart];
+  startWord.mergeBefore = true; delete startWord.splitBefore;
+
+  // If lastIdx is not the last word of this rendered paragraph, split after it
+  // so words after the selection form their own paragraph.
+  const nextWord = wordsData[lastIdx + 1];
+  if (nextWord) {
+    // Only split after if the next word would naturally continue the same para
+    const nextParaStart = _getRenderedParaStart(lastIdx + 1);
+    if (nextParaStart <= lastIdx) {
+      // next word was in the same para — force a split
+      nextWord.splitBefore = true; delete nextWord.mergeBefore;
+    }
+  }
+
   undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
   renderTranscript(); saveToDB();
+  showUndoToast('Merged ↑');
 }
 
 function doSplitSelection(firstGlobalIdx, lastGlobalIdx) {
@@ -321,36 +316,6 @@ function doSplitSelection(firstGlobalIdx, lastGlobalIdx) {
   }
   undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
   renderTranscript(); saveToDB();
-}
-
-function doDeleteSelection(firstGlobalIdx, lastGlobalIdx) {
-  const before = serializeSegments();
-  const count  = lastGlobalIdx - firstGlobalIdx + 1;
-
-  // Remove words from their segments, splicing in reverse to keep indices stable
-  const wordsToRemove = wordsData.slice(firstGlobalIdx, lastGlobalIdx + 1);
-  const bySegIdx = {};
-  wordsToRemove.forEach(w => {
-    if (!bySegIdx[w.segIdx]) bySegIdx[w.segIdx] = [];
-    bySegIdx[w.segIdx].push(w.wordIdx);
-  });
-
-  // Remove words from each affected segment (in descending wordIdx order)
-  Object.entries(bySegIdx).forEach(([si, wordIdxs]) => {
-    const seg = segments[parseInt(si)];
-    const toRemove = new Set(wordIdxs);
-    seg.words = seg.words.filter(w => !toRemove.has(w.wordIdx));
-  });
-
-  // Drop any segments that are now empty
-  segments = segments.filter(seg => seg.words.length > 0);
-
-  // Rebuild all references
-  rebuildWordsDataRefs();
-
-  undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
-  renderTranscript(); updateSpeakerStat(); updateEditCount(); saveToDB();
-  showUndoToast(`Deleted ${count} word${count > 1 ? 's' : ''}`);
 }
 
 // ── Internal helper: position a popover relative to an anchor rect ─

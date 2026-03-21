@@ -115,13 +115,9 @@ function renderTranscript() {
       span.textContent      = (idx === 0 ? '' : ' ') + w.word;
       span.onclick = ev => {
         if (ev.detail !== 1) return;
-        if (pi > 0 && !selMenu) {
-          showMergePopover(ev, globalIdx, paraFirstWordIdx, paraLastWordIdx, pi);
-          return;
-        }
         if (audio.src) audio.currentTime = w.start;
       };
-      span.ondblclick  = () => { closeMergePopover(); startEditing(span, si, wi); };
+      span.ondblclick  = () => { startEditing(span, si, wi); };
       span.onmouseenter = ev => {
         const tt = document.getElementById('word-tooltip');
         tt.textContent   = `${formatTime(w.start)} → ${formatTime(w.end)}`;
