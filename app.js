@@ -1,4 +1,78 @@
-// ── State ────────────────────────────────────────────────────────
+// ── IndexedDB ────────────────────────────────────────────────────
+const DB_NAME    = 'voxbox';
+const DB_VERSION = 1;
+const STORE_SESSIONS = 'sessions';   // transcript history
+const STORE_PREFS    = 'prefs';      // api key + lightweight prefs
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_SESSIONS)) {
+        db.createObjectStore(STORE_SESSIONS, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(STORE_PREFS)) {
+        db.createObjectStore(STORE_PREFS);
+      }
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+// ── DB helpers ───────────────────────────────────────────────────
+async function dbGet(store, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store, 'readonly').objectStore(store).get(key);
+    req.onsuccess = e => resolve(e.target.result ?? null);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+async function dbPut(store, value, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx  = db.transaction(store, 'readwrite');
+    const req = key !== undefined
+      ? tx.objectStore(store).put(value, key)
+      : tx.objectStore(store).put(value);
+    tx.oncomplete = resolve;
+    tx.onerror    = e => reject(e.target.error);
+  });
+}
+
+async function dbDelete(store, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(key);
+    tx.oncomplete = resolve;
+    tx.onerror    = e => reject(e.target.error);
+  });
+}
+
+async function dbGetAll(store) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store, 'readonly').objectStore(store).getAll();
+    req.onsuccess = e => resolve(e.target.result ?? []);
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+
+async function dbClearStore(store) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).clear();
+    tx.oncomplete = resolve;
+    tx.onerror    = e => reject(e.target.error);
+  });
+}
+
+// ── State ─────────────────────────────────────────────────────────
 let wordsData    = [];   // [{word,start,end,segIdx,wordIdx,edited,originalWord}]
 let segments     = [];   // [{speaker,speakerClass,start,words}]
 let speakerNames = {};   // {speakerClass -> label}
@@ -9,10 +83,7 @@ let undoStack    = [];
 let redoStack    = [];
 let findMatches  = [];
 let findIndex    = 0;
-const LS_KEY      = 'voxbox_autosave';
-const LS_HIST_KEY = 'voxbox_history';
 const MAX_HISTORY = 12;
-const LS_API_KEY = 'voxbox_apikey';
 const audio      = document.getElementById('audio-player');
 
 // ── File handling ────────────────────────────────────────────────
@@ -65,8 +136,11 @@ async function startTranscription(file, apiKey) {
     try { diarData = await apiCall(file, apiKey, { timestamp_granularities: 'segment', diarize: 'true' }); }
     catch(e) { console.warn('Diarization failed:', e.message); }
     processTranscription(wordData, diarData, file.name);
-  } catch(err) { showScreen('upload');
-renderHistory(); showError('Transcription failed: ' + err.message); }
+  } catch(err) {
+    showScreen('upload');
+    renderHistory();
+    showError('Transcription failed: ' + err.message);
+  }
 }
 
 // ── Process ──────────────────────────────────────────────────────
@@ -175,7 +249,7 @@ function showSpeakerPopover(e, speakerClass, paraFirstWordIdx, paraLastWordIdx) 
     const name = inp.value.trim(); if (!name) return;
     speakerNames[speakerClass] = name;
     document.querySelectorAll(`.speaker-badge[data-speaker-class="${speakerClass}"]`).forEach(b => b.textContent = name);
-    closeSpeakerPopover(); saveToLocalStorage();
+    closeSpeakerPopover(); saveToDB();
   }
   saveBtn.onclick = doRename;
   inp.onkeydown = ev => { if (ev.key === 'Enter') doRename(); if (ev.key === 'Escape') closeSpeakerPopover(); };
@@ -183,11 +257,9 @@ function showSpeakerPopover(e, speakerClass, paraFirstWordIdx, paraLastWordIdx) 
   const allClasses = [...new Set(segments.map(s => s.speakerClass))].sort();
   const nextClass  = Math.max(...allClasses) + 1;
 
-  // Always show the reassign/new-speaker section
   const divEl = document.createElement('div'); divEl.className = 'sp-divider'; pop.appendChild(divEl);
   const hdr = document.createElement('div'); hdr.className = 'sp-header'; hdr.textContent = 'Reassign to'; pop.appendChild(hdr);
 
-  // Existing speakers (excluding current)
   allClasses.filter(sc => sc !== speakerClass).forEach(sc => {
     const item = document.createElement('div'); item.className = 'sp-assign-item';
     const dot = document.createElement('div'); dot.className = 'sp-dot'; dot.style.background = getSpeakerDotColor(sc);
@@ -197,7 +269,6 @@ function showSpeakerPopover(e, speakerClass, paraFirstWordIdx, paraLastWordIdx) 
     pop.appendChild(item);
   });
 
-  // New speaker option
   const newItem = document.createElement('div'); newItem.className = 'sp-assign-item';
   const newDot  = document.createElement('div'); newDot.className = 'sp-dot';
   newDot.style.cssText = `background:${getSpeakerDotColor(nextClass)};border:1.5px dashed ${getSpeakerDotColor(nextClass)};background:transparent;`;
@@ -223,24 +294,20 @@ function reassignSpeaker(fromClass, toClass) {
   segments.forEach(seg => { if (seg.speakerClass === fromClass) { seg.speakerClass = toClass; seg.speaker = String(toClass); } });
   renderTranscript();
   updateSpeakerStat();
-  saveToLocalStorage();
+  saveToDB();
 }
 
 function createAndAssignSpeaker(paraFirstWordIdx, paraLastWordIdx, newClass) {
-  // Only retarget the underlying segments whose words fall within this paragraph's word range.
-  // A segment belongs to this paragraph if any of its words are in [paraFirstWordIdx, paraLastWordIdx].
   const paraWords = wordsData.slice(paraFirstWordIdx, paraLastWordIdx + 1);
   const segIdxsInPara = new Set(paraWords.map(w => w.segIdx));
-
   segIdxsInPara.forEach(si => {
     segments[si].speakerClass = newClass;
     segments[si].speaker = String(newClass);
   });
-
   speakerNames[newClass] = `SPEAKER ${newClass + 1}`;
   renderTranscript();
-  updateSpeakerStat(); //
-  saveToLocalStorage();
+  updateSpeakerStat();
+  saveToDB();
 }
 
 // ── Render ───────────────────────────────────────────────────────
@@ -272,7 +339,6 @@ function renderTranscript() {
     badge.className = `speaker-badge speaker-${para.speakerClass % 5}`;
     badge.dataset.speakerClass = para.speakerClass;
     badge.textContent = speakerNames[para.speakerClass] || `SPEAKER ${para.speakerClass + 1}`;
-    // Pass the word index range of this paragraph so "New speaker" only affects these words
     const paraFirstWordIdx = wordsData.indexOf(para.words[0]);
     const paraLastWordIdx  = wordsData.indexOf(para.words[para.words.length - 1]);
     badge.onclick = ev => { ev.stopPropagation(); showSpeakerPopover(ev, para.speakerClass, paraFirstWordIdx, paraLastWordIdx); };
@@ -331,7 +397,7 @@ function startEditing(span, si, wi) {
     wrapper.remove(); span.style.display = '';
     span.onclick    = ev => { if (audio.src && ev.detail === 1) audio.currentTime = word.start; };
     span.ondblclick = ()  => startEditing(span, si, wi);
-    updateEditCount(); saveToLocalStorage();
+    updateEditCount(); saveToDB();
   }
   input.onblur = commit;
   input.onkeydown = ev => {
@@ -350,7 +416,7 @@ function updateEditCount() {
 
 function resetEdits() {
   segments.forEach(seg => seg.words.forEach(w => { w.word = w.originalWord; w.edited = false; }));
-  undoStack = []; redoStack = []; updateUndoButtons(); updateEditCount(); renderTranscript(); saveToLocalStorage();
+  undoStack = []; redoStack = []; updateUndoButtons(); updateEditCount(); renderTranscript(); saveToDB();
 }
 
 // ── Undo / Redo ──────────────────────────────────────────────────
@@ -359,7 +425,7 @@ function applyEdit(segIdx, wordIdx, val) {
   word.word = val; word.edited = val !== word.originalWord;
   const span = document.querySelector(`.word[data-seg-idx="${segIdx}"][data-word-idx="${wordIdx}"]`);
   if (span) { const hs = span.textContent.startsWith(' '); span.textContent = (hs ? ' ' : '') + val; span.className = 'word' + (word.edited ? ' edited' : ''); }
-  updateEditCount(); saveToLocalStorage();
+  updateEditCount(); saveToDB();
 }
 function undo() { if (!undoStack.length) return; const op = undoStack.pop(); redoStack.push(op); applyEdit(op.segIdx, op.wordIdx, op.before); updateUndoButtons(); showUndoToast('Undone'); }
 function redo() { if (!redoStack.length) return; const op = redoStack.pop(); undoStack.push(op); applyEdit(op.segIdx, op.wordIdx, op.after); updateUndoButtons(); showUndoToast('Redone'); }
@@ -398,7 +464,7 @@ function replaceOne() {
   word.word = replaceVal; word.edited = replaceVal !== word.originalWord;
   undoStack.push({ segIdx: si, wordIdx: wi, before, after: replaceVal }); redoStack = []; updateUndoButtons();
   const hs = span.textContent.startsWith(' '); span.textContent = (hs ? ' ' : '') + replaceVal; span.className = 'word' + (word.edited ? ' edited' : '');
-  updateEditCount(); saveToLocalStorage();
+  updateEditCount(); saveToDB();
   findMatches.splice(findIndex, 1); span.classList.remove('found','found-current');
   if (findMatches.length) findIndex = findIndex % findMatches.length;
   updateFindCurrent();
@@ -412,27 +478,32 @@ function replaceAll() {
     undoStack.push({ segIdx: si, wordIdx: wi, before, after: replaceVal });
     const hs = span.textContent.startsWith(' '); span.textContent = (hs ? ' ' : '') + replaceVal; span.className = 'word' + (word.edited ? ' edited' : '');
   });
-  redoStack = []; updateUndoButtons(); updateEditCount(); saveToLocalStorage();
+  redoStack = []; updateUndoButtons(); updateEditCount(); saveToDB();
   clearFindHighlights(); findMatches = []; document.getElementById('find-count').textContent = 'Done';
 }
 
-// ── Autosave ─────────────────────────────────────────────────────
-// ── Autosave (current session edits) ────────────────────────────
-function saveToLocalStorage() {
-  if (!wordsData.length) return;
-  try {
-    const edits = wordsData.filter(w => w.edited).map(w => ({ segIdx: w.segIdx, wordIdx: w.wordIdx, word: w.word }));
-    const filename = document.getElementById('topbar-filename').innerText.trim();
-    localStorage.setItem(LS_KEY, JSON.stringify({ filename, ts: Date.now(), speakerNames, edits }));
-    // Also update the edits in the matching history entry
-    updateHistoryEdits(filename, edits, speakerNames);
-  } catch(_) {}
+// ── Persistence (IndexedDB) ───────────────────────────────────────
+// saveToDB: debounced so rapid edits (e.g. replaceAll) don't fire dozens of writes
+let _saveTimer = null;
+function saveToDB() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_flushSaveToDB, 400);
 }
 
-function applyAutosave(filename) {
+async function _flushSaveToDB() {
+  if (!wordsData.length) return;
   try {
-    // First check history for a matching entry
-    const hist = getHistory();
+    const edits    = wordsData.filter(w => w.edited).map(w => ({ segIdx: w.segIdx, wordIdx: w.wordIdx, word: w.word }));
+    const filename = document.getElementById('topbar-filename').innerText.trim();
+    await updateHistoryEdits(filename, edits, speakerNames);
+  } catch(e) {
+    console.warn('DB save failed:', e);
+  }
+}
+
+async function applyAutosave(filename) {
+  try {
+    const hist  = await getHistory();
     const entry = hist.find(h => h.filename === filename);
     if (!entry) return;
     let applied = 0;
@@ -445,14 +516,26 @@ function applyAutosave(filename) {
   } catch(_) {}
 }
 
-// ── History ──────────────────────────────────────────────────────
-function getHistory() {
-  try { return JSON.parse(localStorage.getItem(LS_HIST_KEY) || '[]'); } catch(_) { return []; }
+// ── History (IndexedDB) ───────────────────────────────────────────
+async function getHistory() {
+  try {
+    const all = await dbGetAll(STORE_SESSIONS);
+    // Sort newest first
+    return all.sort((a, b) => new Date(b.date) - new Date(a.date));
+  } catch(_) { return []; }
 }
 
-function saveToHistory(filename, language, speakerCount) {
+async function saveToHistory(filename, language, speakerCount) {
   try {
-    const hist = getHistory().filter(h => h.filename !== filename); // remove old entry with same name
+    const hist  = await getHistory();
+    // Remove any existing entry with same filename
+    const old   = hist.find(h => h.filename === filename);
+    if (old) await dbDelete(STORE_SESSIONS, old.id);
+
+    // Trim to MAX_HISTORY - 1 before inserting so we never exceed the cap
+    const overflow = hist.filter(h => h.filename !== filename).slice(MAX_HISTORY - 1);
+    for (const o of overflow) await dbDelete(STORE_SESSIONS, o.id);
+
     const entry = {
       id: Date.now().toString(),
       filename,
@@ -463,7 +546,6 @@ function saveToHistory(filename, language, speakerCount) {
       wordCount: wordsData.length,
       speakerNames: { ...speakerNames },
       edits: [],
-      // Store the full transcript so it can be restored without re-calling the API
       segments: segments.map(seg => ({
         speaker: seg.speaker,
         speakerClass: seg.speakerClass,
@@ -471,48 +553,47 @@ function saveToHistory(filename, language, speakerCount) {
         words: seg.words.map(w => ({ word: w.word, originalWord: w.originalWord, start: w.start, end: w.end, edited: w.edited }))
       }))
     };
-    hist.unshift(entry);
-    // Keep only MAX_HISTORY entries; drop oldest if over limit
-    while (hist.length > MAX_HISTORY) hist.pop();
-    localStorage.setItem(LS_HIST_KEY, JSON.stringify(hist));
+    await dbPut(STORE_SESSIONS, entry);
   } catch(e) {
-    console.warn('History save failed (storage full?):', e.message);
+    console.warn('History save failed:', e.message);
   }
 }
 
-function updateHistoryEdits(filename, edits, names) {
+async function updateHistoryEdits(filename, edits, names) {
   try {
-    const hist = getHistory();
+    const hist  = await getHistory();
     const entry = hist.find(h => h.filename === filename);
     if (!entry) return;
-    entry.edits = edits;
+    entry.edits        = edits;
     entry.speakerNames = { ...names };
-    entry.speakerCount = new Set(segments.map(s => s.speakerClass)).size; // ← add
-    // Update segments snapshot so speaker reassignments survive reload
-    entry.segments = segments.map(seg => ({                               // ← add
+    entry.speakerCount = new Set(segments.map(s => s.speakerClass)).size;
+    entry.segments     = segments.map(seg => ({
       speaker: seg.speaker,
       speakerClass: seg.speakerClass,
       start: seg.start,
       words: seg.words.map(w => ({ word: w.word, originalWord: w.originalWord, start: w.start, end: w.end, edited: w.edited }))
     }));
-    localStorage.setItem(LS_HIST_KEY, JSON.stringify(hist));
-  } catch(_) {}
+    await dbPut(STORE_SESSIONS, entry);
+  } catch(e) {
+    console.warn('updateHistoryEdits failed:', e);
+  }
 }
 
-function deleteHistoryEntry(id) {
+async function deleteHistoryEntry(id) {
   try {
-    const hist = getHistory().filter(h => h.id !== id);
-    localStorage.setItem(LS_HIST_KEY, JSON.stringify(hist));
+    await dbDelete(STORE_SESSIONS, id);
     renderHistory();
   } catch(_) {}
 }
 
-function clearAllHistory() {
-  try { localStorage.removeItem(LS_HIST_KEY); renderHistory(); } catch(_) {}
+async function clearAllHistory() {
+  try {
+    await dbClearStore(STORE_SESSIONS);
+    renderHistory();
+  } catch(_) {}
 }
 
 function loadFromHistory(entry) {
-  // Restore segments and wordsData from stored snapshot
   segments  = [];
   wordsData = [];
   speakerNames = entry.speakerNames || {};
@@ -534,7 +615,6 @@ function loadFromHistory(entry) {
   document.getElementById('total-time').textContent    = formatTime(entry.duration);
   document.getElementById('topbar-filename').innerHTML = `<span>${escHtml(entry.filename)}</span>`;
 
-  // No audio — clear player, hide waveform, show attach banner
   audio.src = '';
   document.getElementById('waveform-wrap').style.display = 'none';
   document.getElementById('current-time').textContent = '0:00';
@@ -552,8 +632,8 @@ function loadFromHistory(entry) {
   showUndoToast('Loaded from history');
 }
 
-function renderHistory() {
-  const hist = getHistory();
+async function renderHistory() {
+  const hist    = await getHistory();
   const section = document.getElementById('recent-section');
   const list    = document.getElementById('recent-list');
 
@@ -565,14 +645,14 @@ function renderHistory() {
     const item = document.createElement('div');
     item.className = 'recent-item';
 
-    const date = new Date(entry.date);
+    const date    = new Date(entry.date);
     const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    const dur  = formatTime(entry.duration);
-    const spk  = entry.speakerCount > 1 ? `${entry.speakerCount} speakers` : '1 speaker';
-    const wc   = entry.wordCount ? `${entry.wordCount.toLocaleString()} words` : '';
+    const dur     = formatTime(entry.duration);
+    const spk     = entry.speakerCount > 1 ? `${entry.speakerCount} speakers` : '1 speaker';
+    const wc      = entry.wordCount ? `${entry.wordCount.toLocaleString()} words` : '';
     const editCount = (entry.edits || []).length;
-    const editStr = editCount ? ` · ${editCount} edit${editCount > 1 ? 's' : ''}` : '';
+    const editStr   = editCount ? ` · ${editCount} edit${editCount > 1 ? 's' : ''}` : '';
 
     item.innerHTML = `
       <div class="recent-item-icon">
@@ -715,7 +795,6 @@ function showNoAudioBar(expectedFilename) {
   document.getElementById('no-audio-expected').textContent = expectedFilename;
   document.getElementById('no-audio-wrong').style.display  = 'none';
   document.getElementById('no-audio-bar').classList.add('visible');
-  // Reset file input so same file can be re-selected after a wrong attempt
   const inp = document.getElementById('audio-reattach-input');
   inp.value = '';
 }
@@ -728,35 +807,27 @@ function hideNoAudioBar() {
 
 function handleReattachAudio(file) {
   if (!file) return;
-
-  // Enforce matching filename
   if (file.name !== _expectedAudioFilename) {
     const wrong = document.getElementById('no-audio-wrong');
     wrong.textContent = `✗ Expected "${_expectedAudioFilename}", got "${file.name}"`;
     wrong.style.display = 'inline';
-    // Reset so user can try again
     document.getElementById('audio-reattach-input').value = '';
     return;
   }
-
-  // Correct file — wire it up
   document.getElementById('no-audio-wrong').style.display = 'none';
   audio.src = URL.createObjectURL(file);
   audio.load();
-
-  // Decode waveform
   file.arrayBuffer()
     .then(buf => new (window.AudioContext || window.webkitAudioContext)().decodeAudioData(buf))
     .then(decoded => drawWaveform(decoded))
     .catch(() => {});
-
   hideNoAudioBar();
   showUndoToast('Audio attached');
 }
 
 // ── Text selection → assign speaker ─────────────────────────────
 let selMenu = null;
-let selWordRange = null; // {firstGlobalIdx, lastGlobalIdx}
+let selWordRange = null;
 
 function closeSelMenu() {
   if (selMenu) { selMenu.remove(); selMenu = null; }
@@ -768,56 +839,36 @@ function clearSelHighlights() {
   document.querySelectorAll('.word.sel-highlight').forEach(el => el.classList.remove('sel-highlight'));
 }
 
-// Listen for mouseup on the transcript body to detect text selections
 document.getElementById('transcript-body').addEventListener('mouseup', e => {
-  // Ignore if this was a click on an edit input
   if (e.target.tagName === 'INPUT') return;
-
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-    // No selection — close menu if open
     if (selMenu) closeSelMenu();
     return;
   }
-
-  // Collect all .word spans that are fully or partially within the selection range
   const allWordSpans = Array.from(document.querySelectorAll('#transcript-body .word'));
-  const selectedSpans = allWordSpans.filter(span => {
-    const range = document.createRange();
-    range.selectNode(span);
-    return sel.containsNode(span, true); // true = partial overlap OK
-  });
-
+  const selectedSpans = allWordSpans.filter(span => sel.containsNode(span, true));
   if (selectedSpans.length === 0) return;
 
-  // Map to global word indices
   const globalIndices = selectedSpans
     .map(span => {
-      const si = parseInt(span.dataset.segIdx);
-      const wi = parseInt(span.dataset.wordIdx);
-      // Find position in wordsData
+      const si = parseInt(span.dataset.segIdx), wi = parseInt(span.dataset.wordIdx);
       return wordsData.findIndex(w => w.segIdx === si && w.wordIdx === wi);
     })
     .filter(i => i !== -1)
     .sort((a, b) => a - b);
 
   if (!globalIndices.length) return;
-
   const firstGlobalIdx = globalIndices[0];
   const lastGlobalIdx  = globalIndices[globalIndices.length - 1];
   selWordRange = { firstGlobalIdx, lastGlobalIdx };
 
-  // Highlight selected words
   clearSelHighlights();
   selectedSpans.forEach(span => span.classList.add('sel-highlight'));
-
-  // Clear browser selection so it doesn't interfere with the menu
   sel.removeAllRanges();
-
   showSelMenu(e.clientX, e.clientY, firstGlobalIdx, lastGlobalIdx, selectedSpans.length);
 });
 
-// Close sel menu on click outside transcript
 document.addEventListener('mousedown', e => {
   if (selMenu && !selMenu.contains(e.target)) closeSelMenu();
 });
@@ -825,11 +876,11 @@ document.addEventListener('mousedown', e => {
 function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
   if (selMenu) selMenu.remove();
 
-  const allClasses   = [...new Set(segments.map(s => s.speakerClass))].sort();
-  const nextClass    = Math.max(...allClasses) + 1;
-  const firstWord    = wordsData[firstIdx];
-  const lastWord     = wordsData[lastIdx];
-  const timeRange    = `${formatTime(firstWord.start)} → ${formatTime(lastWord.end)}`;
+  const allClasses = [...new Set(segments.map(s => s.speakerClass))].sort();
+  const nextClass  = Math.max(...allClasses) + 1;
+  const firstWord  = wordsData[firstIdx];
+  const lastWord   = wordsData[lastIdx];
+  const timeRange  = `${formatTime(firstWord.start)} → ${formatTime(lastWord.end)}`;
 
   const menu = document.createElement('div');
   menu.className = 'sel-menu';
@@ -840,7 +891,6 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
     <div class="sel-menu-info">${wordCount} word${wordCount > 1 ? 's' : ''} · ${timeRange}</div>
   `;
 
-  // Existing speakers
   allClasses.forEach(sc => {
     const item = document.createElement('div');
     item.className = 'sel-menu-item';
@@ -853,7 +903,6 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
     menu.appendChild(item);
   });
 
-  // Divider + new speaker
   const div = document.createElement('div'); div.className = 'sel-menu-divider'; menu.appendChild(div);
   const newItem = document.createElement('div'); newItem.className = 'sel-menu-item';
   const newDot  = document.createElement('div');
@@ -873,7 +922,6 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
   document.body.appendChild(menu);
   selMenu = menu;
 
-  // Position — keep within viewport
   const mw = menu.offsetWidth || 220, mh = menu.offsetHeight || 200;
   let left = x + 8, top = y + 8;
   if (left + mw > window.innerWidth  - 12) left = x - mw - 8;
@@ -883,30 +931,23 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
 }
 
 function assignSelectionToSpeaker(firstGlobalIdx, lastGlobalIdx, targetClass) {
-  // Collect the unique segIdxs touched by the selected words
-  const selectedWords = wordsData.slice(firstGlobalIdx, lastGlobalIdx + 1);
+  const selectedWords  = wordsData.slice(firstGlobalIdx, lastGlobalIdx + 1);
   const touchedSegIdxs = [...new Set(selectedWords.map(w => w.segIdx))];
 
   touchedSegIdxs.forEach(si => {
-    const seg = segments[si];
-    const segWords = seg.words; // original segment words
+    const seg      = segments[si];
+    const segWords = seg.words;
 
-    // Find which words in this segment are selected
     const selectedInSeg = segWords.filter(w => {
       const gi = wordsData.findIndex(wd => wd.segIdx === si && wd.wordIdx === w.wordIdx);
       return gi >= firstGlobalIdx && gi <= lastGlobalIdx;
     });
 
-    // If ALL words in this segment are selected — just reassign the whole segment
     if (selectedInSeg.length === segWords.length) {
       seg.speakerClass = targetClass;
       seg.speaker = String(targetClass);
       return;
     }
-
-    // PARTIAL selection — split this segment into up to 3 parts:
-    // [before-selection] [selected] [after-selection]
-    // We do this by inserting new segment entries and updating wordsData references.
 
     const firstSelWi = selectedInSeg[0].wordIdx;
     const lastSelWi  = selectedInSeg[selectedInSeg.length - 1].wordIdx;
@@ -915,26 +956,21 @@ function assignSelectionToSpeaker(firstGlobalIdx, lastGlobalIdx, targetClass) {
     const selected = segWords.filter(w => w.wordIdx >= firstSelWi && w.wordIdx <= lastSelWi);
     const after    = segWords.filter(w => w.wordIdx > lastSelWi);
 
-    // Build replacement segments
     const newSegs = [];
     if (before.length)   newSegs.push({ ...seg, words: before });
     if (selected.length) newSegs.push({ ...seg, speakerClass: targetClass, speaker: String(targetClass), words: selected });
     if (after.length)    newSegs.push({ ...seg, words: after });
 
-    // Replace si in segments array with newSegs
     segments.splice(si, 1, ...newSegs);
-
-    // Rebuild all wordsData segIdx/wordIdx references since segment indices shifted
     rebuildWordsDataRefs();
   });
 
   renderTranscript();
   updateSpeakerStat();
-  saveToLocalStorage();
+  saveToDB();
 }
 
 function rebuildWordsDataRefs() {
-  // After splicing segments, reindex every word's segIdx and wordIdx
   wordsData = [];
   segments.forEach((seg, si) => {
     seg.words.forEach((w, wi) => {
@@ -977,12 +1013,23 @@ function formatTime(s) { if (s == null || isNaN(s)) return '—'; return `${Math
 function escHtml(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function showError(msg) { const el = document.getElementById('error-toast'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => { el.style.display = 'none'; }, 6000); }
 function toggleApiKeyVisibility() { const i = document.getElementById('api-key-input'); i.type = i.type === 'password' ? 'text' : 'password'; }
-document.getElementById('api-key-input').addEventListener('input', function() {
-  if (this.value.trim()) localStorage.setItem(LS_API_KEY, this.value.trim());
-  else localStorage.removeItem(LS_API_KEY);
+
+// ── API key persistence (IndexedDB prefs store) ──────────────────
+document.getElementById('api-key-input').addEventListener('input', async function() {
+  const val = this.value.trim();
+  try {
+    if (val) await dbPut(STORE_PREFS, val, 'apiKey');
+    else     await dbDelete(STORE_PREFS, 'apiKey');
+  } catch(_) {}
 });
-const savedKey = localStorage.getItem(LS_API_KEY);
-if (savedKey) document.getElementById('api-key-input').value = savedKey;
+
+// Load saved API key on startup
+(async () => {
+  try {
+    const saved = await dbGet(STORE_PREFS, 'apiKey');
+    if (saved) document.getElementById('api-key-input').value = saved;
+  } catch(_) {}
+})();
 
 function updateSpeakerStat() {
   const uniqueSpeakers = new Set(segments.map(s => s.speakerClass)).size;
