@@ -179,6 +179,16 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
     menu.appendChild(splitItem);
   }
 
+  // Delete selection
+  const deleteDiv = document.createElement('div'); deleteDiv.className = 'sel-menu-divider'; menu.appendChild(deleteDiv);
+  const deleteItem = document.createElement('div'); deleteItem.className = 'sel-menu-item sel-menu-item-danger';
+  deleteItem.innerHTML = `
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;"><path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+    <span>Delete section</span>
+  `;
+  deleteItem.onclick = () => { doDeleteSelection(firstIdx, lastIdx); closeSelMenu(); };
+  menu.appendChild(deleteItem);
+
   document.body.appendChild(menu); selMenu = menu;
   const mw = menu.offsetWidth || 220, mh = menu.offsetHeight || 200;
   let left = x + 8, top = y + 8;
@@ -311,6 +321,36 @@ function doSplitSelection(firstGlobalIdx, lastGlobalIdx) {
   }
   undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
   renderTranscript(); saveToDB();
+}
+
+function doDeleteSelection(firstGlobalIdx, lastGlobalIdx) {
+  const before = serializeSegments();
+  const count  = lastGlobalIdx - firstGlobalIdx + 1;
+
+  // Remove words from their segments, splicing in reverse to keep indices stable
+  const wordsToRemove = wordsData.slice(firstGlobalIdx, lastGlobalIdx + 1);
+  const bySegIdx = {};
+  wordsToRemove.forEach(w => {
+    if (!bySegIdx[w.segIdx]) bySegIdx[w.segIdx] = [];
+    bySegIdx[w.segIdx].push(w.wordIdx);
+  });
+
+  // Remove words from each affected segment (in descending wordIdx order)
+  Object.entries(bySegIdx).forEach(([si, wordIdxs]) => {
+    const seg = segments[parseInt(si)];
+    const toRemove = new Set(wordIdxs);
+    seg.words = seg.words.filter(w => !toRemove.has(w.wordIdx));
+  });
+
+  // Drop any segments that are now empty
+  segments = segments.filter(seg => seg.words.length > 0);
+
+  // Rebuild all references
+  rebuildWordsDataRefs();
+
+  undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
+  renderTranscript(); updateSpeakerStat(); updateEditCount(); saveToDB();
+  showUndoToast(`Deleted ${count} word${count > 1 ? 's' : ''}`);
 }
 
 // ── Internal helper: position a popover relative to an anchor rect ─

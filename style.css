@@ -285,6 +285,9 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
 }
 .sel-menu-item:hover { background: var(--bg-3); color: var(--text-0); }
 .sel-menu-item svg { width: 13px; height: 13px; flex-shrink: 0; }
+.sel-menu-item-danger { color: #f87171; }
+.sel-menu-item-danger:hover { background: rgba(248,113,113,0.12); color: #fca5a5; }
+.sel-menu-item-danger svg { color: #f87171; }
 .sel-menu-divider { height: 1px; background: var(--border); margin: 4px 6px; }
 .word.sel-highlight { background: rgba(99,179,237,0.25); outline: 1px solid rgba(99,179,237,0.5); }
 
