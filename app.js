@@ -318,7 +318,7 @@ function createAndAssignSpeaker(paraFirstWordIdx, paraLastWordIdx, newClass) {
 function renderTranscript() {
   const body = document.getElementById('transcript-body');
   body.innerHTML = '';
-  const PAUSE = 1.5, MAX = 60;
+  const PAUSE = 1.5;
   const paras = []; let cur = null;
 
   wordsData.forEach((w, i) => {
@@ -327,7 +327,7 @@ function renderTranscript() {
     const spkChange = prev && segments[w.segIdx].speaker !== segments[prev.segIdx].speaker;
     const forceSplit = w.splitBefore === true;
     const forceMerge = w.mergeBefore === true;
-    const autoBreak  = !cur || gap > PAUSE || spkChange || cur.words.length >= MAX;
+    const autoBreak  = !cur || gap > PAUSE || spkChange;
     const shouldBreak = forceSplit || (!forceMerge && autoBreak);
 
     if (shouldBreak) {
