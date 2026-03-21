@@ -65,7 +65,7 @@ html, body { height: 100%; background: var(--bg-0); color: var(--text-0); font-f
 .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-0); }
 
 /* Upload */
-#upload-screen { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; }
+/* #upload-screen layout defined below in recent-section block */
 .upload-card { width: 100%; max-width: 520px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 40px; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .upload-icon { width: 56px; height: 56px; background: var(--accent-dim); border: 1px solid rgba(249,115,22,0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
 .upload-icon svg { width: 24px; height: 24px; color: var(--accent); }
@@ -76,6 +76,29 @@ html, body { height: 100%; background: var(--bg-0); color: var(--text-0); font-f
 .upload-drop-zone span { font-size: 13px; color: var(--text-1); }
 .upload-drop-zone strong { color: var(--accent); }
 .upload-formats { font-size: 11px; color: var(--text-2); }
+
+/* Recent transcriptions */
+.recent-section { width: 100%; max-width: 520px; margin-top: 28px; }
+.recent-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.recent-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
+.recent-clear { font-size: 11px; color: var(--text-2); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: var(--radius); transition: color 0.12s; }
+.recent-clear:hover { color: var(--red); }
+.recent-list { display: flex; flex-direction: column; gap: 6px; }
+.recent-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-lg); cursor: pointer; transition: all 0.15s; }
+.recent-item:hover { border-color: var(--border-mid); background: var(--bg-3); }
+.recent-item-icon { width: 32px; height: 32px; background: var(--accent-dim); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.recent-item-icon svg { width: 14px; height: 14px; color: var(--accent); }
+.recent-item-info { flex: 1; min-width: 0; }
+.recent-item-name { font-size: 13px; font-weight: 500; color: var(--text-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+.recent-item-meta { font-size: 11px; color: var(--text-2); font-family: var(--mono); }
+.recent-item-delete { background: none; border: none; color: var(--text-2); cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; opacity: 0; transition: all 0.12s; flex-shrink: 0; }
+.recent-item:hover .recent-item-delete { opacity: 1; }
+.recent-item-delete:hover { color: var(--red); background: rgba(239,68,68,0.1); }
+.recent-empty { font-size: 12px; color: var(--text-2); text-align: center; padding: 20px 0; }
+
+/* Upload screen flex layout to support side-by-side on wide screens */
+#upload-screen { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: 40px; gap: 32px; overflow-y: auto; }
+#upload-screen .upload-card { flex-shrink: 0; }
 
 /* Processing */
 #processing-screen { flex: 1; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 20px; }
@@ -201,6 +224,10 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
     <div class="topbar-sep"></div>
     <div class="topbar-title" id="topbar-filename">Drop an audio file to begin</div>
     <div class="topbar-actions">
+      <button class="btn btn-ghost" id="back-btn" onclick="goBack()" style="display:none;font-size:12px;">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5"/></svg>
+        New
+      </button>
       <div class="export-wrap" id="export-wrap">
         <button class="btn btn-ghost" onclick="toggleExportMenu()" id="export-btn" style="display:none;font-size:12px;">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 10V2M5 7l3 3 3-3M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1"/></svg>Export
@@ -259,6 +286,15 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
             <div class="upload-formats">MP3 · WAV · M4A · FLAC · OGG · up to 3 hours</div>
           </div>
           <input type="file" id="file-input" accept="audio/*" style="display:none" onchange="handleFileSelect(this.files[0])"/>
+        </div>
+
+        <!-- RECENT TRANSCRIPTIONS -->
+        <div class="recent-section" id="recent-section" style="display:none">
+          <div class="recent-header">
+            <span class="recent-label">Recent</span>
+            <button class="recent-clear" onclick="clearAllHistory()">Clear all</button>
+          </div>
+          <div class="recent-list" id="recent-list"></div>
         </div>
       </div>
 
@@ -356,7 +392,9 @@ let undoStack    = [];
 let redoStack    = [];
 let findMatches  = [];
 let findIndex    = 0;
-const LS_KEY     = 'voxedit_autosave';
+const LS_KEY      = 'voxedit_autosave';
+const LS_HIST_KEY = 'voxedit_history';
+const MAX_HISTORY = 12;
 const audio      = document.getElementById('audio-player');
 
 // ── File handling ────────────────────────────────────────────────
@@ -409,7 +447,8 @@ async function startTranscription(file, apiKey) {
     try { diarData = await apiCall(file, apiKey, { timestamp_granularities: 'segment', diarize: 'true' }); }
     catch(e) { console.warn('Diarization failed:', e.message); }
     processTranscription(wordData, diarData, file.name);
-  } catch(err) { showScreen('upload'); showError('Transcription failed: ' + err.message); }
+  } catch(err) { showScreen('upload');
+renderHistory(); showError('Transcription failed: ' + err.message); }
 }
 
 // ── Process ──────────────────────────────────────────────────────
@@ -451,6 +490,7 @@ function processTranscription(wordData, diarData, filename) {
   document.getElementById('topbar-filename').innerHTML = `<span>${escHtml(filename)}</span>`;
   renderTranscript();
   applyAutosave(filename);
+  saveToHistory(filename, wordData.language || 'auto', speakerCount);
   showScreen('transcript');
   document.getElementById('export-btn').style.display = '';
   startSync();
@@ -720,23 +760,174 @@ function replaceAll() {
 }
 
 // ── Autosave ─────────────────────────────────────────────────────
+// ── Autosave (current session edits) ────────────────────────────
 function saveToLocalStorage() {
   if (!wordsData.length) return;
   try {
     const edits = wordsData.filter(w => w.edited).map(w => ({ segIdx: w.segIdx, wordIdx: w.wordIdx, word: w.word }));
-    localStorage.setItem(LS_KEY, JSON.stringify({ filename: document.getElementById('topbar-filename').innerText.trim(), ts: Date.now(), speakerNames, edits }));
+    const filename = document.getElementById('topbar-filename').innerText.trim();
+    localStorage.setItem(LS_KEY, JSON.stringify({ filename, ts: Date.now(), speakerNames, edits }));
+    // Also update the edits in the matching history entry
+    updateHistoryEdits(filename, edits, speakerNames);
   } catch(_) {}
 }
+
 function applyAutosave(filename) {
   try {
-    const raw = localStorage.getItem(LS_KEY); if (!raw) return;
-    const save = JSON.parse(raw);
-    if (save.filename && save.filename !== filename) return;
+    // First check history for a matching entry
+    const hist = getHistory();
+    const entry = hist.find(h => h.filename === filename);
+    if (!entry) return;
     let applied = 0;
-    (save.edits || []).forEach(e => { const word = segments[e.segIdx]?.words[e.wordIdx]; if (word) { word.word = e.word; word.edited = true; applied++; } });
-    if (save.speakerNames) speakerNames = { ...speakerNames, ...save.speakerNames };
+    (entry.edits || []).forEach(e => {
+      const word = segments[e.segIdx]?.words[e.wordIdx];
+      if (word) { word.word = e.word; word.edited = true; applied++; }
+    });
+    if (entry.speakerNames) speakerNames = { ...speakerNames, ...entry.speakerNames };
     if (applied) { renderTranscript(); updateEditCount(); showUndoToast(`Restored ${applied} saved edit${applied > 1 ? 's' : ''}`); }
   } catch(_) {}
+}
+
+// ── History ──────────────────────────────────────────────────────
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(LS_HIST_KEY) || '[]'); } catch(_) { return []; }
+}
+
+function saveToHistory(filename, language, speakerCount) {
+  try {
+    const hist = getHistory().filter(h => h.filename !== filename); // remove old entry with same name
+    const entry = {
+      id: Date.now().toString(),
+      filename,
+      date: new Date().toISOString(),
+      language,
+      speakerCount,
+      duration: audio.duration || 0,
+      wordCount: wordsData.length,
+      speakerNames: { ...speakerNames },
+      edits: [],
+      // Store the full transcript so it can be restored without re-calling the API
+      segments: segments.map(seg => ({
+        speaker: seg.speaker,
+        speakerClass: seg.speakerClass,
+        start: seg.start,
+        words: seg.words.map(w => ({ word: w.word, originalWord: w.originalWord, start: w.start, end: w.end, edited: w.edited }))
+      }))
+    };
+    hist.unshift(entry);
+    // Keep only MAX_HISTORY entries; drop oldest if over limit
+    while (hist.length > MAX_HISTORY) hist.pop();
+    localStorage.setItem(LS_HIST_KEY, JSON.stringify(hist));
+  } catch(e) {
+    console.warn('History save failed (storage full?):', e.message);
+  }
+}
+
+function updateHistoryEdits(filename, edits, names) {
+  try {
+    const hist = getHistory();
+    const entry = hist.find(h => h.filename === filename);
+    if (!entry) return;
+    entry.edits = edits;
+    entry.speakerNames = { ...names };
+    // Also update words in stored segments to reflect edits
+    edits.forEach(e => {
+      const seg = entry.segments[e.segIdx];
+      if (seg && seg.words[e.wordIdx]) { seg.words[e.wordIdx].word = e.word; seg.words[e.wordIdx].edited = true; }
+    });
+    localStorage.setItem(LS_HIST_KEY, JSON.stringify(hist));
+  } catch(_) {}
+}
+
+function deleteHistoryEntry(id) {
+  try {
+    const hist = getHistory().filter(h => h.id !== id);
+    localStorage.setItem(LS_HIST_KEY, JSON.stringify(hist));
+    renderHistory();
+  } catch(_) {}
+}
+
+function clearAllHistory() {
+  try { localStorage.removeItem(LS_HIST_KEY); renderHistory(); } catch(_) {}
+}
+
+function loadFromHistory(entry) {
+  // Restore segments and wordsData from stored snapshot
+  segments  = [];
+  wordsData = [];
+  speakerNames = entry.speakerNames || {};
+
+  entry.segments.forEach((seg, si) => {
+    const words = seg.words.map((w, wi) => ({
+      word: w.word, originalWord: w.originalWord, start: w.start, end: w.end,
+      edited: w.edited || false, segIdx: si, wordIdx: wi
+    }));
+    segments.push({ speaker: seg.speaker, speakerClass: seg.speakerClass, start: seg.start, words });
+    wordsData.push(...words);
+  });
+
+  document.getElementById('stat-words').textContent    = wordsData.length.toLocaleString();
+  document.getElementById('stat-segments').textContent = segments.length;
+  document.getElementById('stat-speakers').textContent = entry.speakerCount || '—';
+  document.getElementById('stat-language').textContent = entry.language || 'auto';
+  document.getElementById('stat-duration').textContent = formatTime(entry.duration);
+  document.getElementById('total-time').textContent    = formatTime(entry.duration);
+  document.getElementById('topbar-filename').innerHTML = `<span>${escHtml(entry.filename)}</span>`;
+
+  // No audio file — clear player and hide waveform
+  audio.src = '';
+  document.getElementById('waveform-wrap').style.display = 'none';
+  document.getElementById('current-time').textContent = '0:00';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-thumb').style.left = '0%';
+
+  undoStack = []; redoStack = []; updateUndoButtons();
+  renderTranscript();
+  updateEditCount();
+  showScreen('transcript');
+  document.getElementById('export-btn').style.display = '';
+  startSync();
+
+  showUndoToast('Loaded from history');
+}
+
+function renderHistory() {
+  const hist = getHistory();
+  const section = document.getElementById('recent-section');
+  const list    = document.getElementById('recent-list');
+
+  if (!hist.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  hist.forEach(entry => {
+    const item = document.createElement('div');
+    item.className = 'recent-item';
+
+    const date = new Date(entry.date);
+    const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const dur  = formatTime(entry.duration);
+    const spk  = entry.speakerCount > 1 ? `${entry.speakerCount} speakers` : '1 speaker';
+    const wc   = entry.wordCount ? `${entry.wordCount.toLocaleString()} words` : '';
+    const editCount = (entry.edits || []).length;
+    const editStr = editCount ? ` · ${editCount} edit${editCount > 1 ? 's' : ''}` : '';
+
+    item.innerHTML = `
+      <div class="recent-item-icon">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h10"/></svg>
+      </div>
+      <div class="recent-item-info">
+        <div class="recent-item-name" title="${escHtml(entry.filename)}">${escHtml(entry.filename)}</div>
+        <div class="recent-item-meta">${dateStr} ${timeStr} · ${dur} · ${spk}${wc ? ' · ' + wc : ''}${editStr}</div>
+      </div>
+      <button class="recent-item-delete" title="Remove from history" onclick="event.stopPropagation(); deleteHistoryEntry('${entry.id}')">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
+      </button>
+    `;
+    item.onclick = () => loadFromHistory(entry);
+    list.appendChild(item);
+  });
 }
 
 // ── Audio ────────────────────────────────────────────────────────
@@ -874,6 +1065,14 @@ function showScreen(name) {
   document.getElementById('upload-screen').style.display     = name === 'upload'     ? 'flex' : 'none';
   document.getElementById('processing-screen').style.display = name === 'processing' ? 'flex' : 'none';
   document.getElementById('transcript-screen').style.display = name === 'transcript' ? 'flex' : 'none';
+  document.getElementById('back-btn').style.display          = name === 'transcript' ? ''     : 'none';
+  if (name === 'upload') renderHistory();
+}
+
+function goBack() {
+  if (rafId) cancelAnimationFrame(rafId);
+  activeWordEl = null;
+  showScreen('upload');
 }
 function formatTime(s) { if (s == null || isNaN(s)) return '—'; return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
 function escHtml(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
