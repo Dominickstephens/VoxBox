@@ -12,6 +12,7 @@ let findIndex    = 0;
 const LS_KEY      = 'voxbox_autosave';
 const LS_HIST_KEY = 'voxbox_history';
 const MAX_HISTORY = 12;
+const LS_API_KEY = 'voxbox_apikey';
 const audio      = document.getElementById('audio-player');
 
 // ── File handling ────────────────────────────────────────────────
@@ -976,6 +977,12 @@ function formatTime(s) { if (s == null || isNaN(s)) return '—'; return `${Math
 function escHtml(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function showError(msg) { const el = document.getElementById('error-toast'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => { el.style.display = 'none'; }, 6000); }
 function toggleApiKeyVisibility() { const i = document.getElementById('api-key-input'); i.type = i.type === 'password' ? 'text' : 'password'; }
+document.getElementById('api-key-input').addEventListener('input', function() {
+  if (this.value.trim()) localStorage.setItem(LS_API_KEY, this.value.trim());
+  else localStorage.removeItem(LS_API_KEY);
+});
+const savedKey = localStorage.getItem(LS_API_KEY);
+if (savedKey) document.getElementById('api-key-input').value = savedKey;
 
 function updateSpeakerStat() {
   const uniqueSpeakers = new Set(segments.map(s => s.speakerClass)).size;
