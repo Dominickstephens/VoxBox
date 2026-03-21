@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VoxEdit — Transcription Studio</title>
+<title>VoxBox — Transcription Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -220,7 +220,7 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
 <div id="app">
 
   <div class="topbar">
-    <a class="topbar-logo" href="#"><div class="logo-mark">V</div>VoxEdit</a>
+    <a class="topbar-logo" href="#"><div class="logo-mark">V</div>VoxBox</a>
     <div class="topbar-sep"></div>
     <div class="topbar-title" id="topbar-filename">Drop an audio file to begin</div>
     <div class="topbar-actions">
@@ -392,8 +392,8 @@ let undoStack    = [];
 let redoStack    = [];
 let findMatches  = [];
 let findIndex    = 0;
-const LS_KEY      = 'voxedit_autosave';
-const LS_HIST_KEY = 'voxedit_history';
+const LS_KEY      = 'voxbox_autosave';
+const LS_HIST_KEY = 'voxbox_history';
 const MAX_HISTORY = 12;
 const audio      = document.getElementById('audio-player');
 
