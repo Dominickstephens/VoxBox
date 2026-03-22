@@ -275,30 +275,41 @@ function _getRenderedParaStart(globalIdx) {
 }
 
 // Merge: takes everything from the rendered-paragraph start that contains
-// firstIdx, through lastIdx, and folds it up into the previous paragraph.
-// Any words after lastIdx that were in the same rendered paragraph stay put
-// (they get a splitBefore so they form their own paragraph).
+// firstIdx, through lastIdx, and folds it all up into the paragraph above.
+// Works across multiple paragraphs — every break between paraStart and lastIdx
+// is collapsed. Any words after lastIdx that were in the same paragraph stay
+// put (forced splitBefore so they remain their own paragraph).
 function doMergeSelection(firstIdx, lastIdx) {
-  const before      = serializeSegments();
-  const paraStart   = _getRenderedParaStart(firstIdx);
+  const before    = serializeSegments();
+  const paraStart = _getRenderedParaStart(firstIdx);
 
-  // Find the rendered paragraph start of the paragraph before paraStart
-  // so we know there IS a previous paragraph to merge into.
   if (paraStart === 0) return; // nothing above to merge into
 
-  // Mark the paraStart word as mergeBefore (collapses it into previous para)
-  const startWord = wordsData[paraStart];
-  startWord.mergeBefore = true; delete startWord.splitBefore;
+  const PAUSE = 1.5;
 
-  // If lastIdx is not the last word of this rendered paragraph, split after it
-  // so words after the selection form their own paragraph.
+  // Walk every word from paraStart through lastIdx.
+  // Wherever renderTranscript() would start a new paragraph, mark it mergeBefore
+  // so all those breaks collapse into the paragraph above paraStart.
+  for (let i = paraStart; i <= lastIdx; i++) {
+    const w    = wordsData[i];
+    const prev = wordsData[i - 1];
+    const gap       = prev ? Math.max(0, w.start - prev.end) : 999;
+    const spkChange = prev && segments[w.segIdx].speaker !== segments[prev.segIdx].speaker;
+    const wouldBreak = w.splitBefore || (!w.mergeBefore && (i === 0 || gap > PAUSE || spkChange));
+    if (wouldBreak) {
+      w.mergeBefore = true;
+      delete w.splitBefore;
+    }
+  }
+
+  // If there are words after lastIdx that belonged to the same rendered paragraph
+  // as lastIdx, force a split so they stay separate.
   const nextWord = wordsData[lastIdx + 1];
   if (nextWord) {
-    // Only split after if the next word would naturally continue the same para
     const nextParaStart = _getRenderedParaStart(lastIdx + 1);
     if (nextParaStart <= lastIdx) {
-      // next word was in the same para — force a split
-      nextWord.splitBefore = true; delete nextWord.mergeBefore;
+      nextWord.splitBefore = true;
+      delete nextWord.mergeBefore;
     }
   }
 
