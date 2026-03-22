@@ -75,9 +75,14 @@ async function vocabAddTerms(newTerms) {
   try {
     const existing = await vocabGetTerms();
     const existingLower = new Set(existing.map(t => t.toLowerCase()));
+    const seen = new Set(existingLower);
     const toAdd = newTerms
       .map(t => t.replace(/[.,!?;:'"()\[\]{}]/g, '').trim())
-      .filter(t => t.length > 1 && !existingLower.has(t.toLowerCase()));
+      .filter(t => {
+        if (t.length <= 1 || seen.has(t.toLowerCase())) return false;
+        seen.add(t.toLowerCase());
+        return true;
+      });
     if (!toAdd.length) return;
     const trimmed = [...existing, ...toAdd].slice(-MAX_VOCAB);
     await dbPut(STORE_VOCAB, trimmed, 'terms');
