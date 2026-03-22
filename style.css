@@ -294,4 +294,23 @@ kbd { font-family: var(--mono); font-size: 10px; padding: 1px 4px; border: 1px s
 /* Word timestamp tooltip */
 .word-tooltip { position: fixed; background: var(--bg-3); border: 1px solid var(--border-mid); border-radius: 4px; padding: 3px 8px; font-size: 10px; font-family: var(--mono); color: var(--text-2); pointer-events: none; z-index: 200; display: none; }
 
+/* Vocab sidebar */
+.vocab-section { padding-bottom: 10px; }
+.sidebar-label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.sidebar-label-row .sidebar-label { margin-bottom: 0; }
+.vocab-clear-btn { font-size: 10px; color: var(--text-2); background: none; border: none; cursor: pointer; padding: 1px 4px; border-radius: 3px; transition: color 0.12s; line-height: 1; }
+.vocab-clear-btn:hover { color: var(--red); }
+.vocab-hint { font-size: 11px; color: var(--text-2); line-height: 1.4; margin-bottom: 8px; }
+.vocab-input-row { display: flex; gap: 5px; margin-bottom: 8px; }
+.vocab-input { flex: 1; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 8px; font-size: 11px; font-family: var(--mono); color: var(--text-0); outline: none; min-width: 0; }
+.vocab-input::placeholder { color: var(--text-2); }
+.vocab-input:focus { border-color: var(--accent); }
+.vocab-add-btn { width: 26px; height: 26px; flex-shrink: 0; background: var(--accent-dim); border: 1px solid rgba(249,115,22,0.25); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--accent); transition: all 0.12s; }
+.vocab-add-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+.vocab-tags { display: flex; flex-wrap: wrap; gap: 4px; max-height: 120px; overflow-y: auto; }
+.vocab-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px 2px 8px; background: var(--bg-3); border: 1px solid var(--border); border-radius: 3px; font-size: 10px; font-family: var(--mono); color: var(--text-1); }
+.vocab-tag-remove { background: none; border: none; cursor: pointer; color: var(--text-2); padding: 0; display: flex; align-items: center; line-height: 1; font-size: 13px; transition: color 0.1s; }
+.vocab-tag-remove:hover { color: var(--red); }
+.vocab-empty { font-size: 11px; color: var(--text-2); font-style: italic; padding: 2px 0; }
+
 * { scrollbar-width: thin; scrollbar-color: var(--bg-4) transparent; }

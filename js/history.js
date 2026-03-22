@@ -144,7 +144,7 @@ function _harvestEditsToVocab() {
   const editedWords = wordsData
     .filter(w => w.edited && w.word && w.word !== w.originalWord)
     .map(w => w.word);
-  if (editedWords.length) vocabAddTerms(editedWords);
+  if (editedWords.length) vocabAddTerms(editedWords).then(() => renderVocabTags());
 }
 
 async function deleteHistoryEntry(id) {

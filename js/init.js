@@ -56,5 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('clear-history-btn').addEventListener('click', clearAllHistory);
 
   // ── Boot ───────────────────────────────────────────────────────
+  initVocab();
   showScreen('upload');
 });

@@ -20,6 +20,7 @@
 <script src="js/export.js"        defer></script>
 <script src="js/api.js"           defer></script>
 <script src="js/keyboard.js"      defer></script>
+<script src="js/vocab.js"         defer></script>
 <script src="js/init.js"          defer></script>
 </head>
 <body>
@@ -66,6 +67,21 @@
       <div class="sidebar-section">
         <div class="sidebar-label">Edits</div>
         <div class="sidebar-stat"><span>Modified words</span><span class="val" id="stat-edits">0</span></div>
+      </div>
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section vocab-section">
+        <div class="sidebar-label-row">
+          <div class="sidebar-label">Vocabulary</div>
+          <button class="vocab-clear-btn" id="vocab-clear-btn" title="Clear all terms">Clear</button>
+        </div>
+        <div class="vocab-hint">Terms sent to API as context bias. Add names, jargon, acronyms.</div>
+        <div class="vocab-input-row">
+          <input class="vocab-input" id="vocab-input" placeholder="Add term…" autocomplete="off" spellcheck="false"/>
+          <button class="vocab-add-btn" id="vocab-add-btn">
+            <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg>
+          </button>
+        </div>
+        <div class="vocab-tags" id="vocab-tags"></div>
       </div>
       <div class="sidebar-spacer"></div>
       <div class="api-key-block">

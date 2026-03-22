@@ -84,6 +84,14 @@ async function vocabAddTerms(newTerms) {
   } catch (e) { console.warn('Vocab save failed:', e); }
 }
 
+async function vocabRemoveTerm(term) {
+  try {
+    const existing = await vocabGetTerms();
+    const updated  = existing.filter(t => t.toLowerCase() !== term.toLowerCase());
+    await dbPut(STORE_VOCAB, updated, 'terms');
+  } catch (e) { console.warn('Vocab remove failed:', e); }
+}
+
 async function vocabGetBiasString() {
   const terms = await vocabGetTerms();
   return terms.join(',');
