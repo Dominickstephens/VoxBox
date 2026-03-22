@@ -24,15 +24,45 @@ async function applyAutosave(filename) {
     const hist  = await getHistory();
     const entry = hist.find(h => h.filename === filename);
     if (!entry) return;
+
+    // Restore word edits
     let applied = 0;
     (entry.edits || []).forEach(e => {
       const word = segments[e.segIdx]?.words[e.wordIdx];
       if (word) { word.word = e.word; word.edited = true; applied++; }
     });
+
+    // Restore speaker names
     if (entry.speakerNames) speakerNames = { ...speakerNames, ...entry.speakerNames };
-    if (applied) {
+
+    // Restore section overrides (splitBefore / mergeBefore) and speaker assignments
+    // from the saved segments, matched by position (segIdx / wordIdx).
+    let sectionRestored = false;
+    (entry.segments || []).forEach((savedSeg, si) => {
+      const liveSeg = segments[si];
+      if (!liveSeg) return;
+
+      // Restore speaker assignment if it was changed
+      if (savedSeg.speakerClass !== undefined && savedSeg.speakerClass !== liveSeg.speakerClass) {
+        liveSeg.speakerClass = savedSeg.speakerClass;
+        liveSeg.speaker      = String(savedSeg.speakerClass);
+        sectionRestored = true;
+      }
+
+      (savedSeg.words || []).forEach((savedWord, wi) => {
+        const liveWord = liveSeg.words[wi];
+        if (!liveWord) return;
+        if (savedWord.splitBefore) { liveWord.splitBefore = true;  delete liveWord.mergeBefore; sectionRestored = true; }
+        if (savedWord.mergeBefore) { liveWord.mergeBefore = true;  delete liveWord.splitBefore; sectionRestored = true; }
+      });
+    });
+
+    if (applied || sectionRestored) {
       renderTranscript(); updateEditCount();
-      showUndoToast(`Restored ${applied} saved edit${applied > 1 ? 's' : ''}`);
+      const parts = [];
+      if (applied)          parts.push(`${applied} edit${applied > 1 ? 's' : ''}`);
+      if (sectionRestored)  parts.push('section layout');
+      showUndoToast(`Restored ${parts.join(' & ')}`);
     }
   } catch (_) {}
 }
@@ -68,10 +98,12 @@ async function saveToHistory(filename, language, speakerCount) {
         speaker:      seg.speaker,
         speakerClass: seg.speakerClass,
         start:        seg.start,
-        words: seg.words.map(w => ({
-          word: w.word, originalWord: w.originalWord,
-          start: w.start, end: w.end, edited: w.edited,
-        })),
+        words: seg.words.map(w => {
+          const out = { word: w.word, originalWord: w.originalWord, start: w.start, end: w.end, edited: w.edited };
+          if (w.splitBefore) out.splitBefore = true;
+          if (w.mergeBefore) out.mergeBefore = true;
+          return out;
+        }),
       })),
     };
     await dbPut(STORE_SESSIONS, entry);
@@ -93,10 +125,12 @@ async function updateHistoryEdits(filename, edits, names) {
       speaker:      seg.speaker,
       speakerClass: seg.speakerClass,
       start:        seg.start,
-      words: seg.words.map(w => ({
-        word: w.word, originalWord: w.originalWord,
-        start: w.start, end: w.end, edited: w.edited,
-      })),
+      words: seg.words.map(w => {
+        const out = { word: w.word, originalWord: w.originalWord, start: w.start, end: w.end, edited: w.edited };
+        if (w.splitBefore) out.splitBefore = true;
+        if (w.mergeBefore) out.mergeBefore = true;
+        return out;
+      }),
     }));
     await dbPut(STORE_SESSIONS, entry);
     _harvestEditsToVocab();
@@ -134,11 +168,16 @@ function loadFromHistory(entry) {
   speakerNames = entry.speakerNames || {};
 
   entry.segments.forEach((seg, si) => {
-    const words = seg.words.map((w, wi) => ({
-      word: w.word, originalWord: w.originalWord,
-      start: w.start, end: w.end,
-      edited: w.edited || false, segIdx: si, wordIdx: wi,
-    }));
+    const words = seg.words.map((w, wi) => {
+      const out = {
+        word: w.word, originalWord: w.originalWord,
+        start: w.start, end: w.end,
+        edited: w.edited || false, segIdx: si, wordIdx: wi,
+      };
+      if (w.splitBefore) out.splitBefore = true;
+      if (w.mergeBefore) out.mergeBefore = true;
+      return out;
+    });
     segments.push({ speaker: seg.speaker, speakerClass: seg.speakerClass, start: seg.start, words });
     wordsData.push(...words);
   });
