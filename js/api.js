@@ -31,7 +31,13 @@ async function apiCall(file, apiKey, params) {
   const fd = new FormData();
   fd.append('file', file, file.name);
   fd.append('model', 'voxtral-mini-latest');
-  for (const [k, v] of Object.entries(params)) fd.append(k, v);
+  for (const [k, v] of Object.entries(params)) {
+    if (Array.isArray(v)) {
+      v.forEach(item => fd.append(k, item)); // repeated fields, not a joined string
+    } else {
+      fd.append(k, v);
+    }
+  }
 
   const res = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
     method: 'POST',
@@ -68,18 +74,18 @@ async function startTranscription(file, apiKey) {
   dbSaveAudio(file.name, file);
 
   // Load saved vocabulary for context biasing
-  const contextBias = await vocabGetBiasString();
+  const terms = await vocabGetTerms();
 
   try {
-    const wordParams = { timestamp_granularities: 'word' };
-    if (contextBias) wordParams.context_bias = contextBias;
+    const wordParams = { timestamp_granularities: ['word'] };
+    if (terms.length) wordParams.context_bias = terms;
     const wordData = await apiCall(file, apiKey, wordParams);
     document.getElementById('processing-label').textContent = 'Identifying speakers… (2/2)';
 
     let diarData = null;
     try {
-      const diarParams = { timestamp_granularities: 'segment', diarize: 'true' };
-      if (contextBias) diarParams.context_bias = contextBias;
+      const diarParams = { timestamp_granularities: ['segment'], diarize: true };
+      if (terms.length) diarParams.context_bias = terms;
       diarData = await apiCall(file, apiKey, diarParams);
     } catch (e) {
       console.warn('Diarization failed:', e.message);
