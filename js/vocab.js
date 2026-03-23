@@ -42,8 +42,9 @@ async function vocabAddFromInput() {
   const raw   = input.value.trim();
   if (!raw) return;
 
-  // Support comma-separated batch entry
-  const terms = raw.split(',').map(t => t.trim()).filter(Boolean);
+  // Split on commas AND spaces so "This is my life" → ["This", "is", "my", "life"]
+  const terms = raw.split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+
   await vocabAddTerms(terms);
   input.value = '';
   renderVocabTags();

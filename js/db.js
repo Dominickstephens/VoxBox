@@ -77,6 +77,7 @@ async function vocabAddTerms(newTerms) {
     const existingLower = new Set(existing.map(t => t.toLowerCase()));
     const seen = new Set(existingLower);
     const toAdd = newTerms
+      .flatMap(t => t.split(/[,\s]+/))   // split any multi-word terms
       .map(t => t.replace(/[.,!?;:'"()\[\]{}]/g, '').trim())
       .filter(t => {
         if (t.length <= 1 || seen.has(t.toLowerCase())) return false;
