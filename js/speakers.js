@@ -328,6 +328,38 @@ function doSplitSelection(firstGlobalIdx, lastGlobalIdx) {
   undoStack.push({ type: 'speaker', before, after: serializeSegments() }); redoStack = []; updateUndoButtons();
   renderTranscript(); saveToDB();
 }
+function doDeleteSelection(firstGlobalIdx, lastGlobalIdx) {
+  const before = serializeSegments();
+
+  // Collect which segments are affected and which of their words to remove
+  const toDelete = new Set();
+  for (let i = firstGlobalIdx; i <= lastGlobalIdx; i++) toDelete.add(i);
+
+  // Remove words from their segments, working backwards so indices stay valid
+  for (let si = segments.length - 1; si >= 0; si--) {
+    const seg = segments[si];
+    seg.words = seg.words.filter(w => {
+      const gi = wordsData.findIndex(wd => wd.segIdx === si && wd.wordIdx === w.wordIdx);
+      return !toDelete.has(gi);
+    });
+  }
+
+  // Drop any segments that are now empty
+  for (let si = segments.length - 1; si >= 0; si--) {
+    if (segments[si].words.length === 0) segments.splice(si, 1);
+  }
+
+  rebuildWordsDataRefs();
+
+  undoStack.push({ type: 'speaker', before, after: serializeSegments() });
+  redoStack = [];
+  updateUndoButtons();
+  renderTranscript();
+  updateSpeakerStat();
+  updateEditCount();
+  saveToDB();
+  showUndoToast(`Deleted ${lastGlobalIdx - firstGlobalIdx + 1} word${lastGlobalIdx - firstGlobalIdx + 1 > 1 ? 's' : ''}`);
+}
 
 // ── Internal helper: position a popover relative to an anchor rect ─
 function _positionPopover(pop, anchorRect, side = 'below') {
