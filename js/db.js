@@ -98,11 +98,6 @@ async function vocabRemoveTerm(term) {
   } catch (e) { console.warn('Vocab remove failed:', e); }
 }
 
-async function vocabGetBiasString() {
-  const terms = await vocabGetTerms();
-  return terms.join(',');
-}
-
 async function vocabClear() {
   try { await dbDelete(STORE_VOCAB, 'terms'); } catch (_) {}
 }
