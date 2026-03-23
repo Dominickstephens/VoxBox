@@ -54,35 +54,45 @@ function startSync() {
     lastSeekTime = audio.currentTime; seekWallTime = performance.now();
   }, { passive: true });
 
-  function tick() {
-    let t = audio.currentTime;
-    // Smooth over seek lag: hold the seek position for up to 400 ms
-    if (seekWallTime > 0 && performance.now() - seekWallTime < 400 && Math.abs(t - lastSeekTime) < 0.05) {
-      t = lastSeekTime;
-    }
-    const dur = audio.duration || 0;
-    if (dur > 0) {
-      const pct = (t / dur * 100).toFixed(2);
-      document.getElementById('progress-fill').style.width    = pct + '%';
-      document.getElementById('progress-thumb').style.left    = pct + '%';
-      document.getElementById('waveform-playhead').style.left = pct + '%';
-    }
-    document.getElementById('current-time').textContent  = formatTime(t);
-    document.getElementById('status-right').textContent  = formatTime(t);
+  function _getSmoothedTime() {
+    const t = audio.currentTime;
+    const seekLagActive = seekWallTime > 0
+      && performance.now() - seekWallTime < 400
+      && Math.abs(t - lastSeekTime) < 0.05;
+    return seekLagActive ? lastSeekTime : t;
+  }
 
+  function _updateProgress(t, dur) {
+    document.getElementById('current-time').textContent = formatTime(t);
+    document.getElementById('status-right').textContent = formatTime(t);
+    if (!dur) return;
+    const pct = (t / dur * 100).toFixed(2) + '%';
+    document.getElementById('progress-fill').style.width    = pct;
+    document.getElementById('progress-thumb').style.left    = pct;
+    document.getElementById('waveform-playhead').style.left = pct;
+  }
+
+  function _updateActiveWord(t) {
     const active = findActiveWord(t);
-    if (active) {
-      const el = document.querySelector(`.word[data-seg-idx="${active.segIdx}"][data-word-idx="${active.wordIdx}"]`);
-      if (el && el !== activeWordEl) {
-        if (activeWordEl) activeWordEl.classList.remove('active');
-        el.classList.add('active'); activeWordEl = el;
-        if (autoScroll) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    } else {
+    if (!active) {
       if (activeWordEl) { activeWordEl.classList.remove('active'); activeWordEl = null; }
+      return;
     }
+    const el = document.querySelector(`.word[data-seg-idx="${active.segIdx}"][data-word-idx="${active.wordIdx}"]`);
+    if (!el || el === activeWordEl) return;
+    if (activeWordEl) activeWordEl.classList.remove('active');
+    el.classList.add('active');
+    activeWordEl = el;
+    if (autoScroll) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function tick() {
+    const t = _getSmoothedTime();
+    _updateProgress(t, audio.duration || 0);
+    _updateActiveWord(t);
     rafId = requestAnimationFrame(tick);
   }
+
   rafId = requestAnimationFrame(tick);
 }
 
