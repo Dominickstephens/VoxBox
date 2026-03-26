@@ -139,9 +139,34 @@ function showSelMenu(x, y, firstIdx, lastIdx, wordCount) {
   const menu = document.createElement('div'); menu.className = 'sel-menu';
   menu.onclick = ev => ev.stopPropagation();
   menu.innerHTML = `
-    <div class="sel-menu-header">Assign selection to speaker</div>
     <div class="sel-menu-info">${wordCount} word${wordCount > 1 ? 's' : ''} · ${timeRange}</div>
   `;
+
+  // Copy selection to clipboard
+  const copyItem = document.createElement('div'); copyItem.className = 'sel-menu-item';
+  copyItem.innerHTML = `
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5"/></svg>
+    <span id="sel-copy-label">Copy selection</span>
+  `;
+  copyItem.onclick = () => {
+    const text = wordsData.slice(firstIdx, lastIdx + 1).map(w => w.word).join(' ');
+    navigator.clipboard.writeText(text).then(() => {
+      const lbl = copyItem.querySelector('#sel-copy-label');
+      lbl.textContent = 'Copied!';
+      setTimeout(() => { lbl.textContent = 'Copy selection'; }, 1500);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      const lbl = copyItem.querySelector('#sel-copy-label');
+      lbl.textContent = 'Copied!';
+      setTimeout(() => { lbl.textContent = 'Copy selection'; }, 1500);
+    });
+  };
+  menu.appendChild(copyItem);
+
+  const copyDiv = document.createElement('div'); copyDiv.className = 'sel-menu-divider'; menu.appendChild(copyDiv);
+  const assignHdr = document.createElement('div'); assignHdr.className = 'sel-menu-header'; assignHdr.textContent = 'Assign selection to speaker'; menu.appendChild(assignHdr);
 
   allClasses.forEach(sc => {
     const item = document.createElement('div'); item.className = 'sel-menu-item';
